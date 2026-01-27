@@ -1,0 +1,69 @@
+secrets:
+  passwords:
+    file: /usr/local/serverconfig/camera_dashboard.cfg   # absolute path is OK - Compose v2 resolves it at runtime
+  redis_password:
+    file: /usr/local/serverconfig/camera_dashboard_redis_password
+  cameras:
+    file: /usr/local/serverconfig/camera_dashboard_cameras.json
+
+services:
+  capture_service:
+    build: ./capture_service
+    env_file:
+      - ./.env
+    volumes:
+      - ./shared_volume:/shared_volume
+      - ./opencast:/app/opencast
+      - ./utils:/app/utils
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=/run/secrets/redis_password
+    secrets:
+      - cameras
+      - passwords
+      - redis_password
+
+  ui_service:
+    build: ./ui_service
+    env_file:
+      - ./.env
+    volumes:
+      - ./shared_volume:/shared_volume
+      - ./opencast:/app/opencast
+      - ./utils:/app/utils
+    ports:
+      - "8000:8000"
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=/run/secrets/redis_password
+    secrets:
+      - cameras
+      - passwords
+      - redis_password
+
+  redis:
+    image: redis:7
+    env_file:
+      - ./.env
+    volumes:
+      - redis_data:/data
+    command:
+    - redis-server
+    - --requirepass
+    - /run/secrets/redis_password   # point to the secret file
+    - --appendonly
+    - "yes"
+    ports:
+      - "6379:6379"
+    restart: always
+    secrets:
+      - redis_password
+
+volumes:
+  redis_data:

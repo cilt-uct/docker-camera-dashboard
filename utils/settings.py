@@ -163,6 +163,7 @@ def refresh_cameras() -> list:
     global cameras
     s = FetchSettings()
     from_file = load_cameras_from_file(s.CAMERAS_FILE)
+    cainfo = get_opencast_cainfo()
     if from_file:
         cameras = from_file
         return cameras

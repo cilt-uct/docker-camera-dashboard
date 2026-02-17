@@ -1,0 +1,237 @@
+/* Global styles */
+:root {
+    --color-green: #28a745;
+    --color-red: #dc3545;
+    --color-grey: #6c757d;
+    --color-orange: #ffc107;
+    --color-blue: #007bff;
+    --color-white: #fff;
+    --color-black: #000;
+}
+
+a {
+    text-decoration: none;
+    color: #000;
+}
+
+/*filterring styles*/
+button.btn {
+    border: var(--bs-border-width) solid var(--bs-border-color);
+}
+
+span.filter-name {
+    font-weight: 500;
+}
+
+button.btn {
+    padding: 0.3rem;
+}
+
+.btn-outline-online:hover,
+.btn-outline-online:active,
+.btn-outline-idle:hover,
+.btn-outline-idle:active {
+    background: var(--color-green);
+}
+
+.btn-outline-capturing:hover,
+.btn-outline-capturing.active {
+    background: var(--color-blue);
+}
+
+.btn-outline-error:hover,
+.btn-outline-error.active {
+    background: var(--color-red);
+}
+
+.btn-outline-offline:hover,
+.btn-outline-offline.active,
+.btn-outline-inactive:hover,
+.btn-outline-inactive:active {
+    background: var(--color-black);
+    color: var(--color-white);
+}
+
+.btn-outline-unknown:hover,
+.btn-outline-unknown.active {
+    background: var(--color-orange);
+}
+
+/* status section*/
+.status-line {
+    float: left;
+    text-align: left;
+}
+
+/* camera statuses*/
+.camera-status-inactive {
+    color: var(--color-red);
+}
+
+.camera-status-active {
+    color: var(--color-green);
+}
+
+/*Capture Agent statuses*/
+
+.ca-status-idle {
+    color: var(--color-green);
+}
+
+.ca-status-capturing {
+    color: var(--color-blue);
+}
+
+.ca-status-error {
+    color: var(--color-red);
+}
+
+.ca-status-offline {
+    color: var(--color-black);
+}
+
+.ca-status-unknown {
+    color: var(--color-orange);
+}
+
+/* filtering venue carsd*/
+.camera-hidden {
+    display: none !important;
+}
+
+/* WebM hover */
+.camera-image-wrapper img,
+.camera-image-wrapper video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.none {
+    display: none !important;
+}
+
+.camera-card {
+    display: flex;
+    flex-direction: column;
+}
+
+.camera-card .card-body {
+    flex-grow: 1;
+}
+
+.camera-card img {
+    height: 180px;
+    object-fit: cover;
+    background: var(--color-white);
+}
+
+.camera-image-wrapper {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+}
+
+.camera-image-wrapper {
+    position: relative;
+}
+
+.camera-hover-video {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity .15s ease;
+}
+
+.camera-image-wrapper:hover .camera-hover-video {
+    opacity: 1;
+}
+
+.footer {
+    background-color: var(--color-grey);
+    color: var(--color-white);
+    margin-right: 0;
+    text-align: center;
+}
+
+/* schedule styles */
+
+.schedule-wrapper {
+    overflow-x: auto;
+}
+
+.schedule-header,
+.schedule-row {
+    display: grid;
+    align-items: center;
+    gap: 4px;
+    min-width: 1000px;
+}
+
+.schedule-header {
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.schedule-row {
+    margin-bottom: 6px;
+}
+
+.camera-label {
+    font-weight: 500;
+    padding-right: 6px;
+}
+
+.cell {
+    height: 28px;
+    border-radius: 4px;
+    background: #e5e7eb;
+}
+
+.cell.active {
+    background: #111827;
+}
+
+.cell.hour {
+    height: 24px;
+}
+
+.cell:hover {
+    opacity: 0.8;
+    cursor: pointer;
+}
+
+
+.camera-label {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.camera-status {
+    font-size: 12px;
+}
+
+.status-online {
+    color: #16a34a;
+}
+
+.status-recording {
+    color: #dc2626;
+}
+
+.status-offline {
+    color: #6b7280;
+}
+
+.modal-content {
+    width: 74vw;
+}
+
+button.open-schedule-btn {
+    padding: 0;
+    background: none;
+    border: none;
+}

@@ -1,5 +1,6 @@
 fastapi==0.115.14
 httpx==0.28.1
+Jinja2==3.1.6
 pathlib==1.0.1
 pydantic==2.11.7
 pydantic-settings==2.10.1

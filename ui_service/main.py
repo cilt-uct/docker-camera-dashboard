@@ -103,12 +103,13 @@ class CameraResponse(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 def get_home(request: Request):
     camera_list = get_list(request)
-
+    helpdesk_email = settings.CONTACT_EMAIL
     return templates.TemplateResponse(
         "home.html",
         {
             "request": request,
             "cameras": camera_list,
+            "helpdesk_email": helpdesk_email
         },
     )
 

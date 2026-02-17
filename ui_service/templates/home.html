@@ -1,7 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
 <!-- include header -->
 {% include '_head.html' %}
 
 <body class="bg-light">
+    <nav id="" class="navbar navbar-expand-lg navbar-light bg-light sticky-top">
+        <a href="/" class="navbar-brand">
+            <img src="/cams/resources/images/UCT-logo.png" width="300">
+            <button aria-controls="basic-navbar-nav" type="button" aria-label="Toggle navigation"
+                class="navbar-toggler collapsed">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+        </a>
+        <div class="navbar-collapse collapse" id="basic-navbar-nav">
+            <div class="mr-auto navbar-nav"></div>
+        </div>
+    </nav>
     <div class="container py-4">
         <div class="card mb-3 shadow-sm">
             <div class="card-body">
@@ -23,8 +37,8 @@
                                     <span class="filter-name">Camera Status:</span>
                                     <br>
                                     <div class="btn-group" role="group">
-                                        <button class="btn btn-outline-secondary filter-btn active" data-status="all"
-                                            data-type="camera">
+                                        <button class="btn btn-outline-secondary filter-btn active count-all-cams"
+                                            data-status="all" data-type="camera">
                                             All (<span id="count-all">0</span>)
                                         </button>
                                         <button class="btn btn-outline-online filter-btn" data-status="active"
@@ -44,7 +58,7 @@
                                     <div class="btn-group" role="group">
                                         <button class="btn btn-outline-secondary filter-btn active" data-status="all"
                                             data-type="ca">
-                                            All (<span id="count-all">0</span>)
+                                            All (<span id="count-all-cas">0</span>)
                                         </button>
                                         <button class="btn btn-outline-idle filter-btn" data-status="idle"
                                             data-type="ca">
@@ -72,9 +86,9 @@
                         </div>
                     </div>
 
-                    <!-- Total -->
+                    <!-- Schedule button -->
                     <div class="col-md-1 text-center text-muted small">
-                        <span class="filter-name">Total cameras:</span> <strong id="count-total">0</strong>
+                        <button class="btn btn-primary open-schedule-btn" type="button">Schedules</button>
                     </div>
 
                 </div>
@@ -154,7 +168,7 @@
                                     <div class="text-muted small">
                                         <div class="status-line mt-1">
                                             <i class="fa-solid fa-calendar"></i>
-                                            <button class="open-schedule-btn">Schedule</button>
+                                            <button class="open-schedule-btn no-bg-btn">Schedule</button>
                                         </div>
                                     </div>
                                 </div>
@@ -164,7 +178,7 @@
                                         <div class="status-line mt-1">
                                             <i class="fa-solid fa-at"></i>
                                             <a
-                                                href="mailto:loyiso.ngqwebo@uct.ac.za?subject=Camera%20'{{ camera.name }}'%20Support%20Request
+                                                href="mailto:{{ helpdesk_email }}?subject=[URGENT]%20Camera%20'{{ camera.name }}'%20Support%20Request
                                                 &body=Dear%20Support,%0D%0A%0D%0APlease%20Could%20assist%20with%20the%20following%20Camera%20{{ camera.name }}%20-%20With%20Status%20-%20 {{ camera.capture_status }}">Contact</a>
                                         </div>
                                     </div>

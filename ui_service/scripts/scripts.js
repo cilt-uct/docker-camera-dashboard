@@ -107,6 +107,9 @@ document.addEventListener("DOMContentLoaded", () => {
         set("count-ca-error", caCounts.error);
         set("count-ca-offline", caCounts.offline);
         set("count-ca-unknown", caCounts.unknown);
+
+        // All buttons
+        set("count-all", "count-all-cas", cards.length);
     }
 
     /* filtering buttons */

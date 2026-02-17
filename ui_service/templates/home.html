@@ -1,0 +1,263 @@
+<!-- include header -->
+{% include '_head.html' %}
+
+<body class="bg-light">
+    <div class="container py-4">
+        <div class="card mb-3 shadow-sm">
+            <div class="card-body">
+
+                <div class="row g-3 align-items-center">
+
+                    <!-- Search -->
+                    <div class="col-md-3">
+                        <input type="text" id="cameraSearch" class="form-control"
+                            placeholder="Search by camera name or full name…">
+                    </div>
+
+                    <!-- Status filters -->
+                    <div class="col-md-8">
+                        <div class="container">
+                            <div class="row">
+                                <div class="col-md-4 text-center">
+                                    <!-- Content for column cameras -->
+                                    <span class="filter-name">Camera Status:</span>
+                                    <br>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-outline-secondary filter-btn active" data-status="all"
+                                            data-type="camera">
+                                            All (<span id="count-all">0</span>)
+                                        </button>
+                                        <button class="btn btn-outline-online filter-btn" data-status="active"
+                                            data-type="camera">
+                                            Active (<span id="count-active">0</span>)
+                                        </button>
+                                        <button class="btn btn-outline-inactive filter-btn" data-status="inactive"
+                                            data-type="camera">
+                                            Inactive (<span id="count-cam-inactive">0</span>)
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col text-center">
+                                    <!-- Content for column capture agents -->
+                                    <span class="filter-name">Capture Agent:</span>
+                                    <br>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-outline-secondary filter-btn active" data-status="all"
+                                            data-type="ca">
+                                            All (<span id="count-all">0</span>)
+                                        </button>
+                                        <button class="btn btn-outline-idle filter-btn" data-status="idle"
+                                            data-type="ca">
+                                            Idle (<span id="count-ca-idle">0</span>)
+                                        </button>
+                                        <button class="btn btn-outline-capturing filter-btn" data-status="capturing"
+                                            data-type="ca">
+                                            Capturing (<span id="count-ca-capturing">0</span>)
+                                        </button>
+                                        <button class="btn btn-outline-error filter-btn" data-status="error"
+                                            data-type="ca">
+                                            Error (<span id="count-ca-error">0</span>)
+                                        </button>
+                                        <button class="btn btn-outline-offline filter-btn" data-status="offline"
+                                            data-type="ca">
+                                            Offline (<span id="count-ca-offline">0</span>)
+                                        </button>
+                                        <button class="btn btn-outline-unknown filter-btn" data-status="unknown"
+                                            data-type="ca">
+                                            Unknown (<span id="count-ca-unknown">0</span>)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Total -->
+                    <div class="col-md-1 text-center text-muted small">
+                        <span class="filter-name">Total cameras:</span> <strong id="count-total">0</strong>
+                    </div>
+
+                </div>
+
+            </div>
+        </div>
+
+        <div class="row g-4">
+
+            {% for camera in cameras %}
+            <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12 d-flex camera-col">
+
+                <div class="card camera-card shadow-sm w-100 camera-item"
+                    data-cam-status="{{ camera.camera_status | lower }}"
+                    data-ca-status="{{ camera.capture_status | lower }}" data-name="{{ camera.name | lower }}"
+                    data-fullname="{{ camera.full_name | lower }}">
+
+                    <!-- IMAGE -->
+                    <div class="camera-image-wrapper" data-video="{{ camera.timelapse_webm_url_only }}"
+                        data-name="{{ camera.name }}" data-images='{{ camera.images | tojson }}'>
+
+                        <img src="{{ camera.thumbnail }}" class="camera-thumb" alt="{{ camera.name }}">
+
+                        <video class="camera-hover-video" muted loop playsinline preload="metadata">
+                        </video>
+
+                    </div>
+
+                    <!-- BODY -->
+                    <div class="card-body d-flex flex-column">
+
+                        <div class="small text-muted mb-2">
+                            <!-- last capture -->
+                            <span class="moment-last-capture" data-time="{{ camera.last_capture_completed }}"></span>
+                            <span class="js-last-capture" data-time="{{ camera.last_capture_completed }}"></span>
+                        </div>
+
+                        <div class="row gx-2 align-items-start">
+
+                            <!-- LEFT -->
+                            <div class="col-8">
+                                <h5 class="card-title mb-1 text-break">
+                                    {{ camera.name }}
+                                </h5>
+                                <div class="text-muted small text-break">
+                                    {{ camera.full_name }}
+                                </div>
+                            </div>
+
+                            <!-- RIGHT -->
+                            <div class="col-4 text-end small">
+                                <!-- current venue status ie recording ... -->
+                                <!-- set the status global here -->
+                                {% set status = camera.capture_status %}
+                                <div class="row">
+                                    <div class="status-line camera-status-{{ camera.camera_status | lower }} mb-1"
+                                        data-toggle="tooltip" title="Camera status is {{ camera.camera_status }}">
+                                        <i class="fa-solid fa-video"></i>
+                                        <span>
+                                            {{ camera.camera_status | lower }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- capture agent status -->
+                                <div class="row">
+                                    <div class="status-line status-{{ camera.capture_status | lower }} mt-1"
+                                        data-toggle="tooltip"
+                                        title="Camera Agent status is {{ camera.capture_status }}">
+                                        <i class="fa-solid fa-server"></i>
+                                        <span>
+                                            {{ camera.capture_status | lower }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <!-- schedule -->
+                                <div class="row">
+                                    <div class="text-muted small">
+                                        <div class="status-line mt-1">
+                                            <i class="fa-solid fa-calendar"></i>
+                                            <button class="open-schedule-btn">Schedule</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <!-- contact support -->
+                                    <div class="text-muted small">
+                                        <div class="status-line mt-1">
+                                            <i class="fa-solid fa-at"></i>
+                                            <a
+                                                href="mailto:loyiso.ngqwebo@uct.ac.za?subject=Camera%20'{{ camera.name }}'%20Support%20Request
+                                                &body=Dear%20Support,%0D%0A%0D%0APlease%20Could%20assist%20with%20the%20following%20Camera%20{{ camera.name }}%20-%20With%20Status%20-%20 {{ camera.capture_status }}">Contact</a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+            {% endfor %}
+
+        </div>
+
+        <!-- modal images display-->
+        <div class="modal fade" id="cameraModal" tabindex="-1">
+            <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+                <div class="modal-content">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cameraModalTitle"></h5>
+                        <button class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+
+                        <!-- Date Range Controls -->
+                        <div class="row mb-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label">From</label>
+                                <input type="datetime-local" class="form-control" id="fromDate">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">To</label>
+                                <input type="datetime-local" class="form-control" id="toDate">
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-primary w-100" id="applyRange">
+                                    Apply Filter
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Main Image -->
+                        <div class="text-center mb-3">
+                            <img id="modalMainImage" class="img-fluid rounded shadow" />
+                        </div>
+
+                        <!-- Thumbnails -->
+                        <div id="modalThumbs" class="d-flex  gap-2 justify-content-center"></div>
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Schedule Modal -->
+        <div class="modal fade" id="scheduleModal" tabindex="-1">
+            <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">Camera Schedule</h5>
+
+                        <div class="ms-auto d-flex gap-2">
+                            <button id="prevBtn" class="btn btn-sm btn-outline-secondary">←</button>
+                            <span id="currentLabel"></span>
+                            <button id="nextBtn" class="btn btn-sm btn-outline-secondary">→</button>
+
+                            <select id="cameraFilter" class="form-select form-select-sm">
+                                <option value="all">All Cameras</option>
+                            </select>
+                        </div>
+
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+
+                    <div class="modal-body">
+                        <div id="scheduleHeader" class="schedule-header"></div>
+                        <div id="scheduleGrid"></div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.10/index.global.min.js"></script>
+        <script src="/cams/scripts/moments.js"></script>
+        <script src="/cams/scripts/scripts.js" defer></script>
+        {% include '_footer.html' %}
+</body>
+
+</html>

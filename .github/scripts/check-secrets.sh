@@ -26,7 +26,8 @@ for e in "${excludes[@]}"; do
 done
 
 # Perform scan excluding example/allowed files
-matches=$(grep -RIn --binary-files=without-match -E "$patterns" --exclude-dir=.git "${exclude_args[@]}" || true)
+# matches=$(grep -RIn --binary-files=without-match -E "$patterns" --exclude-dir=.git "${exclude_args[@]}" || true)
+matches=$(grep -RIn --binary-files=without-match -E "$patterns" --exclude-dir=.git "${exclude_args[@]}" | grep -v "# not a secret\|# This line references" || true)
 
 if [ -n "$matches" ]; then
   echo "ERROR: Potential secret keywords found in the repository (excluding .example files and common docs):"

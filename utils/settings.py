@@ -21,6 +21,7 @@ logging.basicConfig(stream=sys.stdout,
 
 logger = logging.getLogger()
 
+# This line references a path for secret loading, but does not embed a secret.
 class FetchSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file='/run/secrets/passwords',
                                         env_file_encoding='utf-8',

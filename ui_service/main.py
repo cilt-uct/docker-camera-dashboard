@@ -1,20 +1,39 @@
 import os
 import redis
+import json
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from uvicorn import run
 
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 from pathlib import Path
 from pydantic import BaseModel
 from typing import List, Optional
 
+from jinja2 import Environment, FileSystemLoader
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+
+from urllib.parse import urlsplit
+
 app = FastAPI()#root_path="/cams")
+
+# load templates folder
+env = Environment(loader=FileSystemLoader("templates"))
 
 # Mount shared volume for images and timelapses
 app.mount("/static", StaticFiles(directory="/shared_volume"), name="static")
+
+# static files
+app.mount("/resources", StaticFiles(directory="resources"), name="resources")
+app.mount("/scripts", StaticFiles(directory="scripts"), name="scripts")
+app.mount("/styles", StaticFiles(directory="styles"), name="styles")
+# templates folder
+templates = Jinja2Templates(directory="templates")
 
 # Configuration
 from utils.settings import FetchSettings, logger, cameras
@@ -65,6 +84,8 @@ class Camera(BaseModel):
 # Model for response (excluding rtsp_url)
 class CameraResponse(BaseModel):
     name: str
+    full_name: str
+    state: str
     current: str
     image_url: str
     image_log: str
@@ -79,26 +100,76 @@ class CameraResponse(BaseModel):
     last_capture_attempt: Optional[str] = None
     last_timelapse_run: Optional[str] = None
 
-@app.get("/", response_model=List[CameraResponse])
+@app.get("/", response_class=HTMLResponse)
+def get_home(request: Request):
+    camera_list = get_list(request)
+    helpdesk_email = settings.CONTACT_EMAIL
+    return templates.TemplateResponse(
+        "home.html",
+        {
+            "request": request,
+            "cameras": camera_list,
+            "helpdesk_email": helpdesk_email
+        },
+    )
+
+# camera api just to check returns on browser
+@app.get("/api/cameras", response_model=List[CameraResponse])
 def get_list(request: Request):
-    return [
-            {
-                "name": camera["name"],
-                "current": str(request.url_for('get_latest_image', camera_name=camera["name"])),
-                "image_url": get_image_url(camera["name"], request),
-                "image_log": get_logfile(camera["name"], "images", request),
-                "thumbnail": get_thumbnail(camera["name"], "images", request),
-                "timelapse": str(request.url_for('get_timelapse', camera_name=camera["name"])),
-                "timelapse_webm_url": get_timelapse_url(camera["name"], 'webm', request),
-                "timelapse_mp4_url": get_timelapse_url(camera["name"], 'mp4', request),
-                "timelapse_thumb_url": get_timelapse_url(camera["name"], 'jpg',request),
-                "timelapse_log": get_logfile(camera["name"], "timelapse", request),
-                "last_capture_completed": redis_client.get(f"camera:{camera['name']}:last_capture_completed"),
-                "last_capture_attempt": redis_client.get(f"camera:{camera['name']}:last_capture_attempt"),
-                "last_timelapse_run": redis_client.get(f"camera:{camera['name']}:last_timelapse_run"),
-            }
-            for camera in cameras
-        ]
+    base = str(request.base_url).rstrip("/")
+
+    cameradetails = get_opencast_cameras()
+    agents = cameradetails["cameras"]["agents"]["agent"]
+
+    camera_list = []
+
+    # get camera infor from fullname
+    cainfo = get_opencast_cainfo()
+    camera_name_map = cainfo.get("cameras", {})
+
+    capture_status = get_capture_agent_status()
+    agent_status = capture_status["capture_agent_status"]["results"]
+
+    # camera status
+    activity_map = get_camera_activity_map()
+    enriched_cameras = []
+
+    ca_state_map = {
+        ca["Name"]: normalize_agent_status(ca.get("Status"))
+        for ca in agent_status
+    }
+    # camera status
+    agent_state_map = {
+        agent["name"]: agent.get("state", "unknown")
+        for agent in agents
+        }
+
+    for camera in cameras:
+
+        name = camera["name"]
+
+        camera_list.append({
+            "name": name,
+            "capture_status": ca_state_map.get(name, "unknown"),
+            "current": str(request.url_for("get_latest_image", camera_name=name)),
+            "image_url": get_image_url(name, request),
+            "image_log": get_logfile(name, "images", request),
+            "thumbnail": get_thumbnail(name, "images", request),
+            "timelapse": str(request.url_for("get_timelapse", camera_name=name)),
+            "timelapse_webm_url": get_timelapse_url(name, "webm", request),
+            "timelapse_webm_url_only": get_timelapse_url_only(name, "webm", request),
+            "timelapse_mp4_url": get_timelapse_url(name, "mp4", request),
+            "timelapse_thumb_url": get_timelapse_url(name, "jpg", request),
+            "timelapse_log": get_logfile(name, "timelapse", request),
+            "last_capture_completed": redis_client.get(f"camera:{name}:last_capture_completed"),
+            "last_capture_attempt": redis_client.get(f"camera:{name}:last_capture_attempt"),
+            "last_timelapse_run": redis_client.get(f"camera:{name}:last_timelapse_run"),
+            "full_name": camera_name_map.get(name),
+            "images": get_camera_images(name, request),
+            "camera_status": activity_map.get(name, "inactive"),
+        })
+
+    return camera_list
 
 # Opencast -------------------------------------------------
 @app.get("/opencast/cameras")
@@ -112,6 +183,57 @@ def get_opencast_cameras():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ca-full-info")
+def get_opencast_cainfo():
+    try:
+        response = settings.OC.get_cainfo()
+        cainfo = response.json()
+        return {
+            'status': 'success',
+            'cameras': cainfo
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# capture agent status
+@app.get("/api/capture-agents-status")
+def get_capture_agent_status():
+    try:
+        response = settings.OC.get_capture_agent_status()
+        status_data = response.json()
+        return {
+            'status': 'success',
+            'capture_agent_status': status_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# camera events
+@app.get("/api/events")
+def get_events():
+    try:
+        response = settings.OC.get_recordings()
+        events_data = response.json()
+        return {
+            'status': 'success',
+            'events': events_data
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Camera sorting functions ---------------------------------------
+def normalize_agent_status(status: str) -> str:
+    if not status:
+        return "unknown"
+    return status.split(".")[-1].lower()
+
+def build_agent_status_map(capture_status):
+    results = capture_status.get("capture_agent_status", {}).get("results", [])
+    return {
+        r["Name"]: normalize_agent_status(r.get("Status"))
+        for r in results
+    }
 
 # Cameras ---------------------------------------------------
 
@@ -129,13 +251,40 @@ def get_image_url(camera_name: str, request: Request) -> str:
 def get_timelapse_url(camera_name: str, type:str, request: Request) -> str:
     timelapse_path = Path(settings.TIMELAPSE_DIR) / f"camera_{camera_name}.{type}"
     if not timelapse_path.exists():
-        return "Timelapse not found"
-    return str(request.url_for("static", path=f"timelapse/camera_{camera_name}.{type}"))
+        return Path(settings.TIMELAPSE_DIR) / f"image_not_found_uct.png"
+    return request.url_for(
+    "static",
+    path=f"timelapse/camera_{camera_name}.{type}"
+)
+
+# get timelapse url without request
+def get_timelapse_url_only(camera_name: str, file_type: str, request: Request) -> str:
+    """
+    Returns the relative URL path (no scheme or host) for a timelapse video.
+    """
+    timelapse_path = Path(settings.TIMELAPSE_DIR) / f"camera_{camera_name}.{file_type}"
+
+    if not timelapse_path.exists():
+        return request.url_for(
+    "static",
+    path=f"timelapse/image_not_found_uct.png")
+
+        # return Path(settings.TIMELAPSE_DIR) / f"image_not_found_uct.png"
+        # return "Timelapse not found"
+
+    # Construct the full URL (assuming it's served via STATIC / TIMELAPSE route)
+    full_url = f"{request.base_url}static/timelapse/camera_{camera_name}.{file_type}"
+
+    # Strip host, return only the path + query/hash if present
+    return urlsplit(full_url).path
 
 def get_thumbnail(camera_name: str, type:str, request: Request) -> str:
     thumbfile = f"/shared_volume/{type}/{camera_name}_thumb.jpg"
     if not os.path.exists(thumbfile):
-        return "Thumbnail not found"
+        return request.url_for(
+            "static",
+            path=f"timelapse/image_not_found_uct.png")
+        # return "Thumbnail not found"
     return str(request.url_for("static", path=f"{type}/{camera_name}_thumb.jpg"))
 
 def get_logfile(camera_name: str, type:str, request: Request) -> str:
@@ -158,6 +307,22 @@ def get_timelapse(camera_name: str, request: Request):
         "mp4_url": get_timelapse_url(camera_name, 'mp4', request),
         "thumb_url": get_timelapse_url(camera_name, 'jpg',request)
     }
+
+# get timelaps image
+def get_camera_images(camera_name: str, request: Request):
+    img_dir = Path(settings.IMAGE_DIR) / f"camera_{camera_name}"
+    if not img_dir.exists():
+        return []
+
+    return [
+        str(
+            request.url_for(
+                "static",
+                path=f"images/camera_{camera_name}/{img.name}"
+            )
+        )
+        for img in sorted(img_dir.glob("*.jpg"))
+    ]
 
 # Status ----------------------------------------------------
 @app.get("/status")
@@ -214,6 +379,33 @@ def get_cameras_activity(threshold_seconds: Optional[int] = None):
         "inactive": inactive,
         "last_capture_completed": timestamps
     }
+
+# get the active inactive camera
+def get_camera_activity_map(threshold_seconds: Optional[int] = None):
+    if threshold_seconds is None:
+        threshold_seconds = settings.CAPTURE_INTERVAL * 2
+
+    now = datetime.now()
+    activity_map = {}
+
+    for ca in cameras:
+        name = ca["name"]
+        key = f"camera:{name}:last_capture_completed"
+        ts = redis_client.get(key)
+
+        status = "inactive"
+
+        if ts:
+            try:
+                t = datetime.fromisoformat(ts)
+                if (now - t).total_seconds() <= threshold_seconds:
+                    status = "active"
+            except Exception:
+                status = "inactive"
+
+        activity_map[name] = status
+
+    return activity_map
 
 if __name__ == "__main__":
 

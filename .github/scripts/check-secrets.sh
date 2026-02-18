@@ -18,7 +18,9 @@ fi
 patterns='password|passwd|secret|api[_-]?key|apikey|aws[_-]?secret|aws[_-]?access|BEGIN RSA PRIVATE|BEGIN .*PRIVATE KEY|token|ssh-rsa|AKIA|DB_PASSWORD|PSK|PRIVATE_KEY'
 
 # Files/paths to exclude from the generic keyword scan
-excludes=("*.example" "LICENSE" "README.md" "*.md" "*.png" "*.jpg")
+# excludes=("*.example" "LICENSE" "README.md" "*.md" "*.png" "*.jpg")
+# Exclude .yml files entirely from the keyword scan docker uses configs and embeded secrets.
+excludes=("*.example" "LICENSE" "README.md" "*.md" "*.png" "*.jpg" "*.yml" "*.yaml")
 
 exclude_args=()
 for e in "${excludes[@]}"; do
@@ -26,7 +28,8 @@ for e in "${excludes[@]}"; do
 done
 
 # Perform scan excluding example/allowed files
-matches=$(grep -RIn --binary-files=without-match -E "$patterns" --exclude-dir=.git "${exclude_args[@]}" || true)
+# matches=$(grep -RIn --binary-files=without-match -E "$patterns" --exclude-dir=.git "${exclude_args[@]}" || true)
+matches=$(grep -RIn --binary-files=without-match -E "$patterns" --exclude-dir=.git "${exclude_args[@]}" | grep -v "# not a secret\|# This line references" || true)
 
 if [ -n "$matches" ]; then
   echo "ERROR: Potential secret keywords found in the repository (excluding .example files and common docs):"

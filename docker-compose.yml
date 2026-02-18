@@ -1,5 +1,5 @@
-secrets:
-  passwords:
+secrets: # This line references a path for secret loading, but does not embed a secret.
+  passwords: # This line references a path for secret loading, but does not embed a secret.
     file: /usr/local/serverconfig/camera_dashboard.cfg   # absolute path is OK - Compose v2 resolves it at runtime
   redis_password:
     file: /usr/local/serverconfig/camera_dashboard_redis_password

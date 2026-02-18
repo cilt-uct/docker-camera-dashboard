@@ -9,6 +9,7 @@ def main():
     settings = FetchSettings()
     try:
         response = settings.OC.get_cameras()
+
         cameras_data = response.json()
 
         # If opencast returns an object with 'agents' or similar, try to unwrap common shapes

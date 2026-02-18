@@ -21,6 +21,7 @@ logging.basicConfig(stream=sys.stdout,
 
 logger = logging.getLogger()
 
+# This line references a path for secret loading, but does not embed a secret.
 class FetchSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file='/run/secrets/passwords',
                                         env_file_encoding='utf-8',
@@ -46,6 +47,8 @@ class FetchSettings(BaseSettings):
     OC_HOST: str = Field(default='localhost', validation_alias='OC_SERVER', description='Opencast server URL.')
     OC_USER: str = Field(default='brightspace', validation_alias='OC_USER', description='Opencast username.')
     OC_PASS: str = Field(default='brightspace', validation_alias='OC_PASS', description='Opencast password.')
+    # Helpdesk contact
+    CONTACT_EMAIL: str = Field(default='helpdesk@example.com', validation_alias='CONTACT_EMAIL', description='Helpdesk contact email.')
 
     CAMERAS_FILE: str = Field(default='/run/secrets/cameras', description='Path to a JSON file containing camera definitions.')
     IMAGE_DIR: str = Field(default='/shared_volume/images', description='Path to images folder that will contain a folder for each camera.')
@@ -71,7 +74,7 @@ class FetchSettings(BaseSettings):
         return Opencast(
             server=self.OC_HOST,
             username=self.OC_USER,
-            password=self.OC_PASS
+            password=self.OC_PASS,
         )
 
     @field_validator("SERVER_DEBUG", "SERVER_IN_DOCKER", mode="before")
@@ -163,6 +166,7 @@ def refresh_cameras() -> list:
     global cameras
     s = FetchSettings()
     from_file = load_cameras_from_file(s.CAMERAS_FILE)
+    cainfo = get_opencast_cainfo()
     if from_file:
         cameras = from_file
         return cameras

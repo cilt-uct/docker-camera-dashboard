@@ -20,6 +20,17 @@ TMP_WEBM="$(dirname "$OUTPUT_BASENAME")/.tmp_$(basename "$OUTPUT_BASENAME").webm
 TMP_MP4="$(dirname "$OUTPUT_BASENAME")/.tmp_$(basename "$OUTPUT_BASENAME").mp4"
 TMP_POSTER="$(dirname "$OUTPUT_BASENAME")/.tmp_$(basename "$OUTPUT_BASENAME").jpg"
 
+CONCAT_FILE=$(mktemp)
+
+while read -r img; do
+    echo "file '$img'" >> "$CONCAT_FILE"
+    echo "duration $(echo "1/$FPS" | bc -l)" >> "$CONCAT_FILE"
+done < "$IMAGE_LIST"
+
+# Repeat last image (required by ffmpeg)
+LAST_IMAGE=$(tail -n1 "$IMAGE_LIST")
+echo "file '$LAST_IMAGE'" >> "$CONCAT_FILE"
+
 cleanup() {
   rm -f "$IMAGE_LIST" "$TMP_WEBM" "$TMP_MP4" "$TMP_POSTER"
 }
@@ -44,17 +55,18 @@ ffmpeg -y -i "$FIRST_IMAGE" \
 # ---- Generate WebM ----
 ffmpeg -y \
   -f concat -safe 0 \
-  -i <(awk '{print "file \x27" $0 "\x27"}' "$IMAGE_LIST") \
+  -i "$CONCAT_FILE" \
   -vf "scale=${TARGET_W}:${TARGET_H}:force_original_aspect_ratio=decrease,\
        pad=${TARGET_W}:${TARGET_H}:(ow-iw)/2:(oh-ih)/2" \
-  -r "$FPS" \
   -c:v libvpx-vp9 \
   -b:v 0 \
   -crf "$DEFAULT_CRF" \
+  -pix_fmt yuv420p \
   -row-mt 1 \
   -deadline good \
-  -pix_fmt yuv420p \
+  -an \
   "$TMP_WEBM" >> "$LOGFILE" 2>&1
+
 
 # ---- Generate MP4 fallback ----
 ffmpeg -y \

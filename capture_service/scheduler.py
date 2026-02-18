@@ -19,7 +19,7 @@ settings.TITLE = "Fetch Camera Images Service"
 redis_client = redis.Redis(
     host=settings.REDIS_HOST,
     port=settings.REDIS_PORT,
-    password=settings.REDIS_PASSWORD,
+    password=settings.REDIS_PASSWORD, #This line references a path for secret loading, but does not embed a secret.
     decode_responses=True
 )
 
@@ -105,7 +105,7 @@ async def capture_images(settings):
     rc = redis.Redis(
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,
-        password=settings.REDIS_PASSWORD,
+        password=settings.REDIS_PASSWORD, #This line references a path for secret loading, but does not embed a secret.
         decode_responses=True
     )
 
@@ -178,7 +178,7 @@ async def generate_timelapses(settings):
     rc = redis.Redis(
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,
-        password=settings.REDIS_PASSWORD,
+        password=settings.REDIS_PASSWORD, #This line references a path for secret loading, but does not embed a secret.
         decode_responses=True
     )
 

@@ -28,9 +28,17 @@ button.btn {
 }
 
 .btn-outline-online:hover,
-.btn-outline-online:active,
+.btn-outline-online.active {
+    background: var(--color-green);
+}
+
 .btn-outline-idle:hover,
-.btn-outline-idle:active {
+.btn-outline-idle.active {
+    background: var(--color-green);
+}
+
+.btn-outline-active:hover,
+.btn-outline-active.active {
     background: var(--color-green);
 }
 
@@ -45,9 +53,13 @@ button.btn {
 }
 
 .btn-outline-offline:hover,
-.btn-outline-offline.active,
+.btn-outline-offline.active {
+    background: var(--color-black);
+    color: var(--color-white);
+}
+
 .btn-outline-inactive:hover,
-.btn-outline-inactive:active {
+.btn-outline-inactive.active {
     background: var(--color-black);
     color: var(--color-white);
 }
@@ -61,36 +73,42 @@ button.btn {
 .status-line {
     float: left;
     text-align: left;
+    width: 100%;
 }
 
 /* camera statuses*/
-.camera-status-inactive {
+.camera-status-offline {
     color: var(--color-red);
 }
 
-.camera-status-active {
+.camera-status-online {
     color: var(--color-green);
 }
 
 /*Capture Agent statuses*/
 
-.ca-status-idle {
+.ca-status-idle,
+.status-idle {
     color: var(--color-green);
 }
 
-.ca-status-capturing {
+.ca-status-capturing,
+.status-capturing {
     color: var(--color-blue);
 }
 
-.ca-status-error {
+.ca-status-error,
+.status-error {
     color: var(--color-red);
 }
 
-.ca-status-offline {
+.ca-status-offline,
+.status-offline {
     color: var(--color-black);
 }
 
-.ca-status-unknown {
+.ca-status-unknown,
+.status-unknown {
     color: var(--color-orange);
 }
 
@@ -234,4 +252,13 @@ button.no-bg-btn {
     padding: 0;
     background: none;
     border: none;
+}
+
+.ca-status-unknown,
+.status-unknown {
+    color: var(--color-orange);
+}
+
+.camera-col.hidden {
+    display: none !important;
 }

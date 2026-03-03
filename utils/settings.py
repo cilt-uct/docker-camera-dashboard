@@ -59,7 +59,7 @@ class FetchSettings(BaseSettings):
     CLEAN_INTERVAL: int = Field(default=604800, description='Interval in seconds for older files to be removed (7 * 24 * 60 * 60 = 7 days in seconds).')
 
     # Adjust these for your environment
-    BATCH_SIZE: int = Field(default=5, description='Number of cameras to run concurrently')
+    BATCH_SIZE: int = Field(default=10, description='Number of cameras to run concurrently')
     BATCH_DELAY: int = Field(default=10, description='Seconds between batches')
 
     def __init__(self, **kwargs):

@@ -8,7 +8,7 @@ THUMB_IMAGE="$4"
 LOGFILE="$5"
 
 # Hard timeout in seconds
-CAPTURE_TIMEOUT=5
+CAPTURE_TIMEOUT=12
 
 # Thumbnail size for UI
 THUMB_WIDTH=640
@@ -26,8 +26,7 @@ timeout "${CAPTURE_TIMEOUT}" ffmpeg \
   -analyzeduration 500000 \
   -probesize 500000 \
   -i "$RTSP_URL" \
-  -frames:v 1 \
-  -q:v 2 \
+  -frames:v 1 -q:v 2 -update 1 \
   -vf "drawtext=text='${CAMERA_NAME}  %{localtime}':\
        x=10:y=10:\
        fontsize=min(w\,h)/40:\

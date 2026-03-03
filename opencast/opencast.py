@@ -130,13 +130,50 @@ class Opencast(object):
         response.raise_for_status()
         return response
 
-    def get_recordings(self, location: Optional[str] = None, limit: int = 1) -> httpx.Response:
+    def get_recordings(self, limit: int = -1) -> httpx.Response:
         """
-        Fetch recordings for the current day filtered by location.
+        Fetch scheduled events/recordings for **today** in the fixed window:
+        08:00:00.000Z to 21:59:59.999Z (UTC).
+
+        Args:
+            limit: Max number of results (-1 = no limit)
+
+        Returns:
+            httpx.Response object from the Opencast admin-ng/events endpoint
         """
-        url = f"{self.server}/admin-ng/event/events.json?limit=-1&filter=status:EVENTS.EVENTS.STATUS.SCHEDULED"
+        now_utc = datetime.now(timezone.utc)
+
+        # Start: today at 08:00:00.000 UTC
+        start_of_day = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
+
+        # End: today at 21:59:59.999 UTC
+        end_of_day = now_utc.replace(hour=21, minute=59, second=59, microsecond=999000)
+
+        # Ensure end is still on the same day (edge case if called very late)
+        if end_of_day < start_of_day:
+            end_of_day = start_of_day + timedelta(hours=13, minutes=59, seconds=59, milliseconds=999)
+
+        # ISO 8601 strings with Z and millisecond precision
+        start_str = start_of_day.isoformat(timespec="milliseconds")
+        end_str   = end_of_day.isoformat(timespec="milliseconds")
+
+        # Final filter string (without "startDate:" prefix here — added directly in URL)
+        date_range = f"{start_str}%2F{end_str}"
+
+        # Build URL with the exact format you want
+        url = (
+            f"{self.server}/admin-ng/event/events.json"
+            f"?limit={limit}"
+            f"&filter=startDate:{date_range}"
+        )
+
+        print(f"Fetching today's scheduled events with URL: {url}")
+        print(f"  Date range: {start_str} / {end_str}")
+
         client = self.create_digest_client()
 
         response = client.get(url)
         response.raise_for_status()
-        return response
+
+        # Return the full URL string (as requested)
+        return url

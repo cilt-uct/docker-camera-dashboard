@@ -35,17 +35,8 @@ function formatLastUpdated(secondsAgo) {
     return moment().subtract(secondsAgo, 'seconds').fromNow();
 }
 
-function extractTimestamp(filename) {
-    const match = filename.match(/(\d{10})\.jpg$/i);
-    return match ? parseInt(match[1], 10) : 0;
-}
-
-function toInputFormat(date) {
-    return date.toISOString().slice(0, 16);
-}
-
 // =====================================================
-// MASTER FETCH + RENDER
+// MASTER FETCH + RENDER – Use /cams/activity as source of truth
 // =====================================================
 async function refreshCameras() {
     try {
@@ -61,30 +52,27 @@ async function refreshCameras() {
         state.activityData = await activityRes.json();
         const fullNamesMap = (await fullNameRes.json())?.cameras || {};
 
-        const agentListRaw = state.camData?.cameras?.agents?.agent || {};
-        const agentArray = Array.isArray(agentListRaw) ? agentListRaw : Object.values(agentListRaw);
+        // Use activity data as source of truth for which cameras exist and their status
+        const activeNames = state.activityData.active || [];
+        const inactiveNames = state.activityData.inactive || [];
+
+        const allCameraNames = [...new Set([...activeNames, ...inactiveNames])];
 
         const cameraMap = new Map();
-        agentArray.forEach(agent => {
-            const name = normalizeName(agent.name);
-            cameraMap.set(name, {
-                name: agent.name,
-                full_name: fullNamesMap[agent.name] || agent.name,
-                camera_status: "offline",
+
+        allCameraNames.forEach(name => {
+            const normalized = normalizeName(name);
+            const agent = state.camData?.cameras?.agents?.agent?.find(a => normalizeName(a.name) === normalized) || {};
+            cameraMap.set(normalized, {
+                name: name,
+                full_name: fullNamesMap[name] || name,
+                camera_status: activeNames.includes(name) ? "online" : "offline",
                 capture_status: "unknown",
                 last_update: agent["time-since-last-update"] || 0
             });
         });
 
-        (state.activityData.active || []).forEach(n => {
-            const name = normalizeName(n);
-            if (cameraMap.has(name)) cameraMap.get(name).camera_status = "online";
-        });
-        (state.activityData.inactive || []).forEach(n => {
-            const name = normalizeName(n);
-            if (cameraMap.has(name)) cameraMap.get(name).camera_status = "offline";
-        });
-
+        // Enrich with capture agent status
         (agentData?.capture_agent_status?.results || []).forEach(agent => {
             const rawName = agent.Name || agent.name || agent.agent_name || agent.id;
             const name = normalizeName(rawName);
@@ -94,15 +82,13 @@ async function refreshCameras() {
 
         renderCameras(Array.from(cameraMap.values()));
         updateCameraCountersFromAPI(state.activityData);
-        updateCACounters();
+        updateCACounters(agentData);
     } catch (err) {
         console.error("refreshCameras failed:", err);
     }
 }
 
-// =====================================================
-// COUNTERS
-// =====================================================
+// cam counts - /cams/activity
 function updateCameraCountersFromAPI(activityData) {
     if (!activityData) return;
     setCount("count-all", (activityData.active_count || 0) + (activityData.inactive_count || 0));
@@ -110,24 +96,36 @@ function updateCameraCountersFromAPI(activityData) {
     setCount("count-cam-inactive", activityData.inactive_count || 0);
 }
 
-function updateCACounters() {
-    const counts = { capturing: 0, idle: 0, error: 0, unknown: 0, offline: 0, total: 0 };
-    state.cardMap.forEach(card => {
-        counts.total++;
-        const caStatus = (card.root?.dataset?.caStatus || "unknown").toLowerCase();
-        if (caStatus in counts) counts[caStatus]++;
+// capture agent counts - /cams/api/capture-agents-status
+function updateCACounters(agentData) {
+
+    const results = agentData?.capture_agent_status?.results || [];
+
+    const counts = {
+        capturing: 0,
+        idle: 0,
+        error: 0,
+        unknown: 0,
+        offline: 0,
+        total: results.length || 0  // ← use real total from API
+    };
+
+    results.forEach(agent => {
+        const status = normalizeAgentStatus(agent.Status || agent.status);
+        if (status in counts) counts[status]++;
     });
+
     setCount("count-all-cas", counts.total);
     setCount("count-ca-capturing", counts.capturing);
     setCount("count-ca-idle", counts.idle);
     setCount("count-ca-error", counts.error);
     setCount("count-ca-unknown", counts.unknown);
     setCount("count-ca-offline", counts.offline);
+
+    console.log("CA counters updated from API:", counts);
 }
 
-// =====================================================
-// RENDER CAMERAS
-// =====================================================
+// display cameras based, no webm over image
 function renderCameras(cameras) {
     const grid = document.getElementById("cameraGrid");
     if (!grid || !Array.isArray(cameras)) return;
@@ -142,7 +140,7 @@ function renderCameras(cameras) {
 
         const camStatusLower = camera.camera_status.toLowerCase();
         const caStatusLower = camera.capture_status.toLowerCase();
-        console.log(`All camera data for ${camera}`);
+
         col.innerHTML = `
         <div class="card camera-card shadow-sm w-100 camera-item"
              data-cam-status="${camStatusLower}"
@@ -154,12 +152,11 @@ function renderCameras(cameras) {
                  data-name="${camera.name}"
                  data-images='${JSON.stringify(camera.images || [])}'>
 
+                <!-- Static thumbnail only -->
                 <img src="/cams/static/images/${camera.name}_thumb.jpg"
-                     class="camera-thumb"
+                     class="camera-thumb img-fluid w-100"
                      alt="${camera.name}"
-                     onerror="this.onerror=null;this.src='/cams/resources/images/image_not_found_uct.png';">
-
-                <video class="camera-hover-video" muted loop playsinline preload="metadata" style="display:none;"></video>
+                     onerror="this.src='/cams/resources/images/image_not_found_uct.png';">
             </div>
 
             <div class="card-body d-flex flex-column">
@@ -193,16 +190,13 @@ function renderCameras(cameras) {
         });
     });
 
-    setupHoverVideo();
     attachCardModals();
     applyFilters();
     updateActiveButtons();
     console.log(`Rendered ${cameras.length} cameras`);
 }
 
-// =====================================================
-// FILTERING
-// =====================================================
+// filtering TODO: add search filter
 function applyFilters() {
     let visible = 0;
 
@@ -220,7 +214,7 @@ function applyFilters() {
         if (show) visible++;
     });
 
-    console.log(`Visible cards after filter: ${visible} / ${state.cardMap.size}`);
+    // console.log(`Visible cards after filter: ${visible} / ${state.cardMap.size}`);
 }
 
 function updateActiveButtons() {
@@ -243,202 +237,143 @@ function updateActiveButtons() {
 
 document.addEventListener("click", e => {
     const btn = e.target.closest(".filter-btn");
-    if (!btn) return;
+    if (btn) {
+        const type = btn.dataset.type;
+        const value = (btn.dataset.status || btn.dataset.value || "all").toLowerCase();
 
-    const type = btn.dataset.type;
-    const value = (btn.dataset.status || btn.dataset.value || "all").toLowerCase();
+        let filterType = type;
+        if (type === "camera") filterType = "cam";
 
-    let filterType = type;
-    if (type === "camera") filterType = "cam";
+        if (!["cam", "ca"].includes(filterType)) return;
 
-    if (!["cam", "ca"].includes(filterType)) return;
+        if (filterType === "cam") {
+            state.activeCamFilter = (state.activeCamFilter === value) ? "all" : value;
+        } else {
+            state.activeCaFilter = (state.activeCaFilter === value) ? "all" : value;
+        }
 
-    if (filterType === "cam") {
-        state.activeCamFilter = (state.activeCamFilter === value) ? "all" : value;
-    } else {
-        state.activeCaFilter = (state.activeCaFilter === value) ? "all" : value;
+        updateActiveButtons();
+        applyFilters();
     }
-
-    updateActiveButtons();
-    applyFilters();
 });
 
-// =====================================================
-// HOVER VIDEO
-// =====================================================
-function setupHoverVideo() {
-    state.cardMap.forEach(card => {
-        const wrapper = card.root.querySelector(".camera-image-wrapper");
-        const video = card.root.querySelector(".camera-hover-video");
-        const thumb = card.root.querySelector(".camera-thumb");
-        if (!wrapper || !video) return;
-
-        wrapper.addEventListener("mouseenter", () => {
-            thumb.style.display = "none";
-            video.src = `/cams/static/timelapse/camera_${wrapper.dataset.name}.webm`;
-            video.style.display = "block";
-            video.currentTime = 0;
-            video.play().catch(() => { });
-        });
-
-        wrapper.addEventListener("mouseleave", () => {
-            video.pause();
-            video.currentTime = 0;
-            video.style.display = "none";
-            thumb.style.display = "block";
-        });
-    });
-}
-
-// Cam modal
+// camera modals
 function attachCardModals() {
-    state.cardMap.forEach(card => {
-        const wrapper = card.root.querySelector(".camera-image-wrapper");
+    console.log("Attaching modal listeners (delegation)");
+    document.addEventListener("click", e => {
+        const wrapper = e.target.closest(".camera-image-wrapper");
         if (!wrapper) return;
 
-        wrapper.addEventListener("click", () => {
-            const cameraName = wrapper.dataset.name;
-            const fullName = wrapper.dataset.fullname || cameraName;
-            console.log(`Modal opened for: ${cameraName}`);
+        const cameraName = wrapper.dataset.name;
+        const fullName = wrapper.dataset.fullname || cameraName || "Camera";
+        // console.log(`Modal click detected for: ${cameraName}`);
 
-            let filenames = [];
-            try {
-                filenames = JSON.parse(wrapper.dataset.images || "[]");
-                console.log(`Loaded ${filenames.length} real images from data-images`);
-            } catch (e) {
-                console.warn("Invalid data-images JSON:", e);
-            }
-
-            // If no real images → guess only the latest 20 possible (5-min steps from now)
-            if (filenames.length === 0) {
-                console.warn(`No real images — guessing latest 20 (5-min steps)`);
-
-                const nowUnix = Math.floor(Date.now() / 1000);
-                const step = 300; // 5 minutes
-
-                filenames = [];
-                let count = 0;
-                for (let ts = nowUnix; ts >= nowUnix - (24 * 3600) && count < 20; ts -= step) {
-                    filenames.push(`${ts}.jpg`);
-                    count++;
-                }
-
-                console.log(`Guessed latest ${filenames.length} filenames`);
-            }
-
-            // Use correct base path — change if your folder is different
-            const base = `/cams/static/images/camera_${cameraName}/`;
-            // const base = `/cams/static/images/${cameraName}/`; // alternative
-
-            const paths = filenames.map(f => base + f)
-                .sort((a, b) => extractTimestamp(b) - extractTimestamp(a));
-
-            openCameraModalWithRange(fullName, paths, cameraName);
-        });
+        openCameraModalWithRange(fullName, cameraName);
     });
 }
 
-function openCameraModalWithRange(title, allImagePaths = [], cameraName) {
+function openCameraModalWithRange(title, cameraName) {
     const modalEl = document.getElementById("cameraModal");
-    if (!modalEl) return;
+    if (!modalEl) {
+        console.error("Modal #cameraModal not found");
+        return;
+    }
 
     const modal = new bootstrap.Modal(modalEl);
 
     const titleEl = document.getElementById("cameraModalTitle");
     const mainImg = document.getElementById("modalMainImage");
     const thumbs = document.getElementById("modalThumbs");
-    const fromInput = document.getElementById("fromDate");
-    const toInput = document.getElementById("toDate");
-    const applyBtn = document.getElementById("applyRange");
 
-    if (!titleEl || !mainImg || !thumbs || !fromInput || !toInput || !applyBtn) return;
+    if (!titleEl || !mainImg || !thumbs) {
+        console.error("Missing modal elements");
+        return;
+    }
 
-    titleEl.textContent = `${title} – Images (${allImagePaths.length} candidates)`;
+    titleEl.textContent = title;
 
-    // Default: midnight today → now
-    const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-
-    fromInput.value = toInputFormat(todayStart);
-    toInput.value = toInputFormat(now);
-
-    fromInput.min = toInput.min = toInputFormat(todayStart);
-    fromInput.max = toInput.max = toInputFormat(now);
-
-    let currentImages = allImagePaths.slice();
-
-    // Cache the thumbnail path once
+    // Cache paths
     const thumbnailPath = `/cams/static/images/${cameraName}_thumb.jpg`;
+    const webmPath = `/cams/static/timelapse/camera_${cameraName}.webm`;
 
-    function renderThumbs(filtered) {
-        thumbs.innerHTML = "";
+    // Clear thumbs area (no thumbnails)
+    thumbs.innerHTML = "";
 
-        if (!filtered.length) {
-            // No images in range → show thumbnail as main image (large)
-            mainImg.src = thumbnailPath;
-            mainImg.style.maxWidth = "80%";
-            mainImg.style.height = "auto";
-            mainImg.style.borderRadius = "8px";
-            mainImg.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
-            mainImg.onerror = () => {
-                mainImg.src = '/cams/resources/images/image_not_found_uct.png';
-                mainImg.style.maxWidth = "60%"; // smaller fallback
-            };
+    // Create / reuse large video player
+    let modalVideo = document.getElementById("modalVideo");
+    if (!modalVideo) {
+        modalVideo = document.createElement("video");
+        modalVideo.id = "modalVideo";
+        modalVideo.className = "w-100 rounded shadow mt-3";
+        modalVideo.muted = true;
+        modalVideo.controls = true;
+        modalVideo.loop = false; // no loop as requested
+        modalVideo.innerHTML = `<source src="${webmPath}" type="video/webm">Your browser does not support video.`;
+        mainImg.after(modalVideo);
+    } else {
+        // Update source if camera changed
+        const source = modalVideo.querySelector("source");
+        if (source) source.src = webmPath;
+        modalVideo.load();
+    }
 
-            thumbs.innerHTML = '<p class="text-muted text-center mt-4">No recent images found — showing latest thumbnail</p>';
-            return;
-        }
+    // Hide static image, show video
+    mainImg.style.display = "none";
+    modalVideo.style.display = "block";
 
-        // Normal case: show newest image as main
-        mainImg.src = filtered[0];
-        mainImg.style.maxWidth = "";
-        mainImg.style.height = "";
-        mainImg.style.borderRadius = "";
-        mainImg.style.boxShadow = "";
+    // Try to play webm
+    modalVideo.currentTime = 0;
+    modalVideo.play().catch(e => {
+        console.log("WebM play failed:", e);
+        // Fallback to large thumbnail
+        modalVideo.style.display = "none";
+        mainImg.src = thumbnailPath;
+        mainImg.style.display = "block";
+        mainImg.style.maxWidth = "90%";
+        mainImg.style.height = "auto";
+        mainImg.onerror = () => {
+            mainImg.src = '/cams/resources/images/image_not_found_uct.png';
+        };
+    });
+
+    // Video error fallback
+    modalVideo.onerror = () => {
+        console.warn("WebM failed to load for", cameraName);
+        modalVideo.style.display = "none";
+        mainImg.src = thumbnailPath;
+        mainImg.style.display = "block";
+        mainImg.style.maxWidth = "90%";
+        mainImg.style.height = "auto";
         mainImg.onerror = () => mainImg.src = '/cams/resources/images/image_not_found_uct.png';
+    };
 
-        filtered.forEach(src => {
-            const img = document.createElement("img");
-            img.src = src;
-            img.className = "rounded shadow-sm";
-            img.style.width = "140px";
-            img.style.cursor = "pointer";
-            img.loading = "lazy";
-            img.addEventListener("click", () => mainImg.src = src);
-            thumbs.appendChild(img);
-        });
-    }
-
-    function applyFilter() {
-        if (!fromInput.value || !toInput.value) return;
-
-        const fromTs = Math.floor(new Date(fromInput.value).getTime() / 1000);
-        const toTs = Math.floor(new Date(toInput.value).getTime() / 1000);
-
-        const filtered = currentImages.filter(src => {
-            const ts = extractTimestamp(src);
-            return ts >= fromTs && ts <= toTs;
-        });
-
-        renderThumbs(filtered);
-    }
-
-    applyBtn.onclick = applyFilter;
-    fromInput.onchange = applyFilter;
-    toInput.onchange = applyFilter;
-
-    applyFilter();  // initial render
     modal.show();
 }
 
-// load and refresh after 5 mins
+// =====================================================
+// INITIAL LOAD + AUTO REFRESH
+// =====================================================
+let isRefreshing = false;
+
 document.addEventListener("DOMContentLoaded", () => {
     console.log("Page loaded → starting refreshCameras()");
     refreshCameras();
 
     // Auto-refresh every 5 minutes
-    setInterval(() => {
-        refreshCameras();
+    setInterval(async () => {
+        if (isRefreshing) return;
+        isRefreshing = true;
+        try {
+            console.log("Auto-refreshing...");
+            const grid = document.getElementById("cameraGrid");
+            if (grid) {
+                grid.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary" role="status"></div><p>Updating cameras...</p></div>';
+            }
+            await refreshCameras();
+        } catch (err) {
+            console.error("Auto-refresh failed:", err);
+        } finally {
+            isRefreshing = false;
+        }
     }, 5 * 60 * 1000);
 });

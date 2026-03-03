@@ -329,7 +329,7 @@ function openCameraModalWithRange(title, cameraName) {
         modalVideo.style.display = "none";
         mainImg.src = thumbnailPath;
         mainImg.style.display = "block";
-        mainImg.style.maxWidth = "90%";
+        mainImg.style.Width = "100%";
         mainImg.style.height = "auto";
         mainImg.onerror = () => {
             mainImg.src = '/cams/resources/images/image_not_found_uct.png';

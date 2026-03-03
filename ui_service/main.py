@@ -103,27 +103,28 @@ class CameraResponse(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 def get_home(request: Request):
     camera_list = get_list(request)
+    offline_cas = get_offline_capture_agent_list()
     helpdesk_email = settings.CONTACT_EMAIL
     return templates.TemplateResponse(
         "home.html",
         {
             "request": request,
             "cameras": camera_list,
+            "offline_capture_agents": offline_cas,
             "helpdesk_email": helpdesk_email
         },
     )
 
 # camera api just to check returns on browser
-@app.get("/api/cameras", response_model=List[CameraResponse])
+# @app.get("/api/cameras", response_model=List[CameraResponse])
 def get_list(request: Request):
     base = str(request.base_url).rstrip("/")
 
     cameradetails = get_opencast_cameras()
-    agents = cameradetails["cameras"]["agents"]["agent"]
+    agents = cameradetails["cameras"]["agents"]["agent"]   # ← 115 items
 
     camera_list = []
 
-    # get camera infor from fullname
     cainfo = get_opencast_cainfo()
     camera_name_map = cainfo.get("cameras", {})
 
@@ -179,7 +180,8 @@ def get_opencast_cameras():
         cameras_data = response.json()
         return {
             'status': 'success',
-            'cameras': cameras_data
+            'cameras': cameras_data,
+            'helpdesk_email': settings.CONTACT_EMAIL
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -221,6 +223,26 @@ def get_events():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# capture agent differences
+@app.get("/api/offline-capture-agents")
+def get_offline_capture_agents():
+    offline_agents = get_offline_capture_agent_list()
+    return {
+        "status": "success",
+        "count": len(offline_agents),
+        "results": offline_agents
+    }
+
+def get_offline_capture_agent_list():
+    response = settings.OC.get_capture_agent_status()
+    data = response.json()
+
+    return [
+        agent
+        for agent in data.get("results", [])
+        if agent.get("Status", "").upper() == "AGENTS.STATUS.OFFLINE"
+    ]
 
 # Camera sorting functions ---------------------------------------
 def normalize_agent_status(status: str) -> str:
@@ -399,9 +421,9 @@ def get_camera_activity_map(threshold_seconds: Optional[int] = None):
             try:
                 t = datetime.fromisoformat(ts)
                 if (now - t).total_seconds() <= threshold_seconds:
-                    status = "active"
+                    status = "online"
             except Exception:
-                status = "inactive"
+                status = "offline"
 
         activity_map[name] = status
 

@@ -1,6 +1,4 @@
-// =====================================================
-// GLOBAL STATE – Separated for clarity
-// =====================================================
+// globals
 const state = {
     cameraMap: new Map(),             // only cameras with DOM refs
     agentMap: new Map(),              // only agents with DOM refs
@@ -9,12 +7,10 @@ const state = {
     activityData: null,
     camData: null,
     agentData: null,
-    currentView: "cameras"            // "cameras" or "agents"
+    currentView: "cameras"
 };
 
-// =====================================================
-// UTILITIES
-// =====================================================
+// utils
 function normalizeName(name) {
     return (name || "").toLowerCase().replace(".local", "").replace(".capture", "").trim();
 }
@@ -34,9 +30,7 @@ function setCount(id, value) {
     if (el) el.textContent = value;
 }
 
-// =====================================================
-// VIEW TOGGLE & INITIAL SETUP
-// =====================================================
+// initital setup on page load
 document.addEventListener("DOMContentLoaded", () => {
     const viewCamerasBtn = document.getElementById("viewCamerasBtn");
     const viewAgentsBtn = document.getElementById("viewAgentsBtn");
@@ -85,9 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 5 * 60 * 1000);
 });
 
-// =====================================================
-// DATA REFRESH
-// =====================================================
+// get data refreshed
 async function refreshData() {
     try {
         const [camRes, agentRes, activityRes, fullNameRes] = await Promise.all([
@@ -102,7 +94,7 @@ async function refreshData() {
         state.activityData = await activityRes.json();
         const fullNamesMap = (await fullNameRes.json())?.cameras || {};
 
-        // ── Process CAMERAS only ─────────────────────────────
+        // process cams here
         const activeNames = state.activityData.active || [];
         const inactiveNames = state.activityData.inactive || [];
         const allCameraNames = [...new Set([...activeNames, ...inactiveNames])];
@@ -121,7 +113,7 @@ async function refreshData() {
             });
         });
 
-        // Enrich camera capture status
+        // camera statuses
         (state.agentData?.capture_agent_status?.results || []).forEach(agent => {
             const rawName = agent.Name || agent.name || agent.agent_name || agent.id;
             const name = normalizeName(rawName);
@@ -160,9 +152,7 @@ async function refreshData() {
     }
 }
 
-// =====================================================
-// RENDER CAMERAS ONLY
-// =====================================================
+// render cameras separated from ca's
 function renderCameras() {
     const grid = document.getElementById("cameraGrid");
     if (!grid) return;
@@ -231,9 +221,7 @@ function renderCameras() {
     console.log(`Rendered cameras: ${state.cameraMap.size}`);
 }
 
-// =====================================================
-// RENDER AGENTS ONLY
-// =====================================================
+// =render Ca's separated from cams
 function renderAgents() {
     const grid = document.getElementById("cameraGrid");
     if (!grid) return;
@@ -366,9 +354,7 @@ document.addEventListener("click", e => {
     updateActiveButtons();
 });
 
-// =====================================================
-// CAMERA MODAL – Fetch large/current image from API
-// =====================================================
+// cam modal, get image from API and open modal
 function attachCardModals() {
     document.removeEventListener("click", handleModalClick);
     document.addEventListener("click", handleModalClick);
@@ -430,6 +416,7 @@ function openCameraModalWithRange(title, cameraName, largeImageUrl) {
     thumbs.innerHTML = "";
     thumbs.style.display = "none";
 
+    // comment out for now, timelapse stuff
     // let modalVideo = document.getElementById("modalVideo");
     // if (!modalVideo) {
     //     modalVideo = document.createElement("video");
@@ -476,9 +463,7 @@ function openCameraModalWithRange(title, cameraName, largeImageUrl) {
     modal.show();
 }
 
-// =====================================================
-// COUNTERS
-// =====================================================
+// counters
 function updateCameraCountersFromAPI(activityData) {
     if (!activityData) return;
     setCount("count-all-cams", (activityData.active_count || 0) + (activityData.inactive_count || 0));

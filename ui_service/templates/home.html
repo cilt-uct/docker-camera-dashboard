@@ -4,243 +4,135 @@
 {% include '_head.html' %}
 
 <body class="bg-light">
-    <nav id="" class="navbar navbar-expand-lg navbar-light bg-light sticky-top">
-        <a href="/" class="navbar-brand">
-            <img src="/cams/resources/images/UCT-logo.png" width="300">
-            <button aria-controls="basic-navbar-nav" type="button" aria-label="Toggle navigation"
-                class="navbar-toggler collapsed">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-        </a>
-        <div class="navbar-collapse collapse" id="basic-navbar-nav">
-            <div class="mr-auto navbar-nav"></div>
-        </div>
-    </nav>
     <div class="container py-4">
+        <!-- View toggle nav btns -->
+        <div class="text-center">
+            <ul class="nav nav-tabs d-flex justify-content-between align-items-center flex-wrap">
+                <!-- Left side: Tabs -->
+                <div class="d-flex">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="viewCamerasBtn" aria-current="page" href="#">Cameras</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="viewAgentsBtn" href="#">Capture Agents</a>
+                    </li>
+                    <!-- <li class="nav-item">
+                        <a class="nav-link" id="viewSchedulesBtn" href="#">Schedules</a>
+                    </li> -->
+                </div>
+
+                <!-- Right side: Logo -->
+                <li class="ms-auto">
+                    <a class="p-0" href="#">
+                        <img src="/cams/resources/images/UCT-logo.png" alt="Logo" class="img-fluid"
+                            style="max-height: 50px; width: auto;">
+                    </a>
+                </li>
+            </ul>
+        </div>
         <div class="card mb-3 shadow-sm">
             <div class="card-body">
 
-                <div class="row g-3 align-items-center">
-
-                    <!-- Search -->
-                    <div class="col-md-3"></div>
-                    <!-- <input type="text" id="cameraSearch" class="form-control"
-                            placeholder="Search by camera name or full name…">
+                <!-- Camera filters (shown by default) -->
+                <div id="cameraFilters" class="text-center mb-4">
+                    <span class="filter-name me-2">Camera Status:</span>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-outline-secondary filter-btn active" data-status="all"
+                            data-type="camera">
+                            All (<span id="count-all-cams">0</span>)
+                        </button>
+                        <button class="btn btn-outline-success filter-btn" data-status="online" data-type="camera">
+                            Online (<span id="count-active">0</span>)
+                        </button>
+                        <button class="btn btn-outline-danger filter-btn" data-status="offline" data-type="camera">
+                            Offline (<span id="count-cam-inactive">0</span>)
+                        </button>
                     </div>
-                    -->
+                </div>
 
-                    <!-- Status filters -->
-                    <div class="col-md-8">
-                        <div class="container">
-                            <div class="row">
-                                <div class="col-md-4 text-center">
-                                    <!-- Content for column cameras -->
-                                    <span class="filter-name">Camera Status:</span>
-                                    <br>
-                                    <div class="btn-group" role="group">
-                                        <button class="btn btn-outline-secondary filter-btn active count-all-cams"
-                                            data-status="all" data-type="camera">
-                                            All (<span id="count-all">0</span>)
-                                        </button>
-                                        <button class="btn btn-outline-active filter-btn" data-status="online"
-                                            data-type="camera">
-                                            Online (<span id="count-active">0</span>)
-                                        </button>
-                                        <button class="btn btn-outline-inactive filter-btn" data-status="offline"
-                                            data-type="camera">
-                                            Offline (<span id="count-cam-inactive">0</span>)
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="col text-center">
-                                    <!-- Content for column capture agents -->
-                                    <span class="filter-name">Capture Agent:</span>
-                                    <br>
-                                    <div class="btn-group" role="group">
-                                        <button class="btn btn-outline-secondary filter-btn active" data-status="all"
-                                            data-type="ca">
-                                            All (<span id="count-all-cas">0</span>)
-                                        </button>
-                                        <button class="btn btn-outline-idle filter-btn" data-status="idle"
-                                            data-type="ca">
-                                            Idle (<span id="count-ca-idle">0</span>)
-                                        </button>
-                                        <button class="btn btn-outline-capturing filter-btn" data-status="capturing"
-                                            data-type="ca">
-                                            Capturing (<span id="count-ca-capturing">0</span>)
-                                        </button>
-                                        <button class="btn btn-outline-error filter-btn" data-status="error"
-                                            data-type="ca">
-                                            Error (<span id="count-ca-error">0</span>)
-                                        </button>
-                                        <button class="btn btn-outline-offline filter-btn" data-status="offline"
-                                            data-type="ca">
-                                            Offline (<span id="count-ca-offline">0</span>)
-                                        </button>
-                                        <button class="btn btn-outline-unknown filter-btn" data-status="unknown"
-                                            data-type="ca">
-                                            Unknown (<span id="count-ca-unknown">0</span>)
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                <!-- Capture Agent filters (hidden by default) -->
+                <div id="caFilters" class="text-center mb-4" style="display: none;">
+                    <span class="filter-name me-2">Capture Agent Status:</span>
+                    <div class="btn-group flex-wrap" role="group">
+                        <button class="btn btn-outline-secondary filter-btn active" data-status="all" data-type="ca">
+                            All (<span id="count-all-cas">0</span>)
+                        </button>
+                        <button class="btn btn-outline-info filter-btn" data-status="capturing" data-type="ca">
+                            Capturing (<span id="count-ca-capturing">0</span>)
+                        </button>
+                        <button class="btn btn-outline-warning filter-btn" data-status="idle" data-type="ca">
+                            Idle (<span id="count-ca-idle">0</span>)
+                        </button>
+                        <button class="btn btn-outline-danger filter-btn" data-status="error" data-type="ca">
+                            Error (<span id="count-ca-error">0</span>)
+                        </button>
+                        <button class="btn btn-outline-secondary filter-btn" data-status="offline" data-type="ca">
+                            Offline (<span id="count-ca-offline">0</span>)
+                        </button>
+                        <button class="btn btn-outline-dark filter-btn" data-status="unknown" data-type="ca">
+                            Unknown (<span id="count-ca-unknown">0</span>)
+                        </button>
                     </div>
-
-                    <!-- Schedule button -->
-                    <!-- <div class="col-md-1 text-center text-muted small">
-                        <button class="btn btn-primary open-schedule-btn" type="button">Schedules</button>
-                    </div> -->
-
                 </div>
 
             </div>
         </div>
 
-        <div class="row g-4">
-            <!-- Create loader  -->
-            <div id="cameraLoader" class="text-center my-4" style="display:none;">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <div>Loading cameras...</div>
+        <!-- Single dynamic grid for both views -->
+        <div id="cameraLoader" class="text-center my-4" style="display:none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
             </div>
-            <div id="cameraGrid" class="row g-4">
-                <!-- Cameras will update via api-->
-            </div>
-
-            <div class="row mt-4">
-                <div class="col">
-                    <h5 class="text-muted">Offline Capture Agents</h5>
-
-                    <div class="row g-4">
-                        {% if offline_capture_agents %}
-                        {% for agent in offline_capture_agents %}
-                        <div class="col-xl-3 col-lg-4 col-md-6 col-sm-12 d-flex camera-col">
-
-                            <div class="card camera-card shadow-sm w-100 camera-item" data-ca-status="offline"
-                                data-name="{{ agent.Name | lower }}" data-fullname="{{ agent.Name | lower }}">
-
-                                <div class="card-body d-flex flex-column">
-
-                                    <div class="row">
-                                        <!-- Left: Agent Name -->
-                                        <div class="col-6 d-flex align-items-center">
-                                            <h5 class="card-title mb-1 text-break">
-                                                {{ agent.Name }}
-                                            </h5>
-                                        </div>
-
-                                        <!-- Right: Status + Contact -->
-                                        <div class="col-6 text-end">
-
-                                            <div class="mb-2">
-                                                <span class="status-line status-offline" data-toggle="tooltip"
-                                                    title="Capture Agent is offline">
-                                                    <i class="fa-solid fa-server"></i>
-                                                    <span>offline</span>
-                                                </span>
-                                            </div>
-
-                                            <div>
-                                                <span class="status-line text-muted small">
-                                                    <i class="fa-solid fa-at"></i>
-                                                    <a
-                                                        href="mailto:{{ helpdesk_email }}?subject=[URGENT]%20Capture%20Agent%20'{{ agent.Name }}'%20Support%20Request&body=Dear%20Support,%0D%0A%0D%0APlease%20assist%20with%20Capture%20Agent%20{{ agent.Name }}%20-%20Status:%20offline">
-                                                        Contact
-                                                    </a>
-                                                </span>
-                                            </div>
-
-                                        </div>
-                                    </div>
-
-                                </div>
-                            </div>
-
-                        </div>
-                        {% endfor %}
-                        {% else %}
-                        <div class="col">
-                            <p class="text-muted">No offline agents</p>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
+            <div>Loading...</div>
         </div>
+        <div id="cameraGrid" class="row g-4">
+            <!-- Dynamic cards (cameras or agents) -->
+        </div>
+
     </div>
 
-    <!-- modal images display-->
+    <!-- Camera Modal -->
     <div class="modal fade" id="cameraModal" tabindex="-1">
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
-
                 <div class="modal-header">
                     <h5 class="modal-title" id="cameraModalTitle"></h5>
                     <button class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-
                 <div class="modal-body">
-
-                    <!-- Date Range Controls -->
-                    <!-- <div class="row mb-3 align-items-end">
-                        <div class="col-md-4">
-                            <label class="form-label">From</label>
-                            <input type="datetime-local" class="form-control" id="fromDate">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">To</label>
-                            <input type="datetime-local" class="form-control" id="toDate">
-                        </div>
-                        <div class="col-md-4">
-                            <button class="btn btn-primary w-100" id="applyRange">
-                                Apply Filter
-                            </button>
-                        </div>
-                    </div> -->
-
                     <!-- Main Image -->
                     <div class="text-center mb-3">
                         <img id="modalMainImage" class="img-fluid rounded shadow" />
                     </div>
-
-                    <!-- Thumbnails -->
-                    <div id="modalThumbs" class="d-flex  gap-2 justify-content-center"></div>
-
+                    <!-- Thumbnails (optional – hidden for now) -->
+                    <div id="modalThumbs" class="d-flex gap-2 justify-content-center"></div>
                 </div>
-
             </div>
         </div>
     </div>
 
-    <!-- Schedule Modal -->
+    <!-- Schedule Modal (unchanged) -->
     <div class="modal fade" id="scheduleModal" tabindex="-1">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
-
                 <div class="modal-header">
                     <h5 class="modal-title">Camera Schedule</h5>
                     <div id="scheduleLabel" class="fw-bold me-auto"></div>
                     <div class="ms-auto d-flex gap-2">
-
                         <select id="cameraFilter" class="form-select form-select-sm">
                             <option value="all">All Cameras</option>
                         </select>
                     </div>
-
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-
                 <div class="modal-body">
                     <div id="scheduleHeader" class="schedule-header"></div>
                     <div id="scheduleGrid"></div>
                 </div>
-
             </div>
         </div>
     </div>
-
+    </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar-scheduler@6.1.10/index.global.min.js"></script>
     <script src="/cams/scripts/moments.js"></script>

@@ -11,6 +11,8 @@ shared_volume/*
 # Python
 __pycache__/
 *.py[cod]
+.venv
+.requirements.sha256
 
 # VSCode
 .vscode/

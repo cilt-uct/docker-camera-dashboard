@@ -1,4 +1,6 @@
-// globals
+// =====================================================
+// GLOBAL STATE – Separated for clarity
+// =====================================================
 const state = {
     cameraMap: new Map(),             // only cameras with DOM refs
     agentMap: new Map(),              // only agents with DOM refs
@@ -7,7 +9,7 @@ const state = {
     activityData: null,
     camData: null,
     agentData: null,
-    currentView: "cameras"
+    currentView: "cameras"            // "cameras" or "agents"
 };
 
 // utils
@@ -30,7 +32,9 @@ function setCount(id, value) {
     if (el) el.textContent = value;
 }
 
-// initital setup on page load
+// =====================================================
+// VIEW TOGGLE & INITIAL SETUP
+// =====================================================
 document.addEventListener("DOMContentLoaded", () => {
     const viewCamerasBtn = document.getElementById("viewCamerasBtn");
     const viewAgentsBtn = document.getElementById("viewAgentsBtn");
@@ -79,7 +83,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 5 * 60 * 1000);
 });
 
-// get data refreshed
+// =====================================================
+// DATA REFRESH
+// =====================================================
 async function refreshData() {
     try {
         const [camRes, agentRes, activityRes, fullNameRes] = await Promise.all([
@@ -95,9 +101,9 @@ async function refreshData() {
         const fullNamesMap = (await fullNameRes.json())?.cameras || {};
 
         // process cams here
-        const activeNames = state.activityData.active || [];
-        const inactiveNames = state.activityData.inactive || [];
-        const allCameraNames = [...new Set([...activeNames, ...inactiveNames])];
+        const onlineNames = state.activityData.online || [];
+        const offlineNames = state.activityData.offline || [];
+        const allCameraNames = [...new Set([...onlineNames, ...offlineNames])];
 
         state.cameraMap.clear();
 
@@ -107,13 +113,13 @@ async function refreshData() {
             state.cameraMap.set(normalized, {
                 name: name,
                 full_name: fullNamesMap[name] || name,
-                camera_status: activeNames.includes(name) ? "online" : "offline",
+                camera_status: onlineNames.includes(name) ? "online" : "offline",
                 capture_status: "unknown",
                 last_update: agent["time-since-last-update"] || 0
             });
         });
 
-        // camera statuses
+        // Enrich camera capture status
         (state.agentData?.capture_agent_status?.results || []).forEach(agent => {
             const rawName = agent.Name || agent.name || agent.agent_name || agent.id;
             const name = normalizeName(rawName);
@@ -152,14 +158,25 @@ async function refreshData() {
     }
 }
 
-// render cameras separated from ca's
+// =====================================================
+// RENDER CAMERAS ONLY
+// =====================================================
 function renderCameras() {
     const grid = document.getElementById("cameraGrid");
     if (!grid) return;
 
     grid.innerHTML = "";
 
-    state.cameraMap.forEach((item, normalizedName) => {
+    // Convert the Map to an array of [key, value] pairs, sort by key, then iterate
+    const sortedEntries = Array.from(state.cameraMap.entries()).sort((a, b) => {
+        // Sort alphabetically by key (a[0] and b[0] are the keys)
+        return a[0].localeCompare(b[0]);
+    });
+
+    sortedEntries.forEach((line) => {
+        normalizedName = line[0];
+        item = line[1];
+
         const col = document.createElement("div");
         col.className = "col-xl-3 col-lg-4 col-md-6 col-sm-12 camera-col";
 
@@ -194,11 +211,6 @@ function renderCameras() {
                                 <i class="fa-solid fa-video"></i> <span>${item.camera_status}</span>
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="status-line status-${caStatusLower} mt-1">
-                                <i class="fa-solid fa-server"></i> <span>${item.capture_status}</span>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -221,7 +233,9 @@ function renderCameras() {
     console.log(`Rendered cameras: ${state.cameraMap.size}`);
 }
 
-// =render Ca's separated from cams
+// =====================================================
+// RENDER AGENTS ONLY
+// =====================================================
 function renderAgents() {
     const grid = document.getElementById("cameraGrid");
     if (!grid) return;
@@ -354,7 +368,9 @@ document.addEventListener("click", e => {
     updateActiveButtons();
 });
 
-// cam modal, get image from API and open modal
+// =====================================================
+// CAMERA MODAL – Fetch large/current image from API
+// =====================================================
 function attachCardModals() {
     document.removeEventListener("click", handleModalClick);
     document.addEventListener("click", handleModalClick);
@@ -416,7 +432,6 @@ function openCameraModalWithRange(title, cameraName, largeImageUrl) {
     thumbs.innerHTML = "";
     thumbs.style.display = "none";
 
-    // comment out for now, timelapse stuff
     // let modalVideo = document.getElementById("modalVideo");
     // if (!modalVideo) {
     //     modalVideo = document.createElement("video");
@@ -463,12 +478,14 @@ function openCameraModalWithRange(title, cameraName, largeImageUrl) {
     modal.show();
 }
 
-// counters
+// =====================================================
+// COUNTERS
+// =====================================================
 function updateCameraCountersFromAPI(activityData) {
     if (!activityData) return;
-    setCount("count-all-cams", (activityData.active_count || 0) + (activityData.inactive_count || 0));
-    setCount("count-active", activityData.active_count || 0);
-    setCount("count-cam-inactive", activityData.inactive_count || 0);
+    setCount("count-all-cams", (activityData.online_count || 0) + (activityData.offline_count || 0));
+    setCount("count-active", activityData.online_count || 0);
+    setCount("count-cam-offline", activityData.offline_count || 0);
 }
 
 function updateCACounters(agentData) {

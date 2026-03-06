@@ -102,18 +102,7 @@ class CameraResponse(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 def get_home(request: Request):
-    camera_list = get_list(request)
-    offline_cas = get_offline_capture_agent_list()
-    helpdesk_email = settings.CONTACT_EMAIL
-    return templates.TemplateResponse(
-        "home.html",
-        {
-            "request": request,
-            "cameras": camera_list,
-            "offline_capture_agents": offline_cas,
-            "helpdesk_email": helpdesk_email
-        },
-    )
+    return templates.TemplateResponse("home.html", {"request": request})
 
 # camera api just to check returns on browser
 # @app.get("/api/cameras", response_model=List[CameraResponse])
@@ -167,7 +156,7 @@ def get_list(request: Request):
             "last_timelapse_run": redis_client.get(f"camera:{name}:last_timelapse_run"),
             "full_name": camera_name_map.get(name),
             "images": get_camera_images(name, request),
-            "camera_status": activity_map.get(name, "inactive"),
+            "camera_status": activity_map.get(name, "offline"),
         })
 
     return camera_list
@@ -216,10 +205,12 @@ def get_capture_agent_status():
 def get_events():
     try:
         response = settings.OC.get_recordings()
-        events_data = response.json()
+        # events_data = response.json()
+
+
         return {
             'status': 'success',
-            'events': events_data
+            'events': response
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -362,7 +353,7 @@ def get_status(request: Request):
 
 @app.get("/activity")
 def get_cameras_activity(threshold_seconds: Optional[int] = None):
-    """Return counts and lists of active/inactive cameras based on `last_capture_completed`.
+    """Return counts and lists of online/offline cameras based on `last_capture_completed`.
 
     A camera is considered *active* if its `last_capture_completed` timestamp is within
     `threshold_seconds`. By default `threshold_seconds` is 2 * CAPTURE_INTERVAL.
@@ -371,8 +362,8 @@ def get_cameras_activity(threshold_seconds: Optional[int] = None):
         threshold_seconds = settings.CAPTURE_INTERVAL * 2
 
     now = datetime.now()
-    active = []
-    inactive = []
+    online = []
+    offline = []
     timestamps = {}
 
     for ca in cameras:
@@ -383,29 +374,29 @@ def get_cameras_activity(threshold_seconds: Optional[int] = None):
             try:
                 t = datetime.fromisoformat(ts)
                 if (now - t).total_seconds() <= threshold_seconds:
-                    active.append(ca['name'])
+                    online.append(ca['name'])
                 else:
-                    inactive.append(ca['name'])
+                    offline.append(ca['name'])
             except Exception:
-                # Malformed timestamp -> treat as inactive
-                inactive.append(ca['name'])
+                # Malformed timestamp -> treat as offline
+                offline.append(ca['name'])
         else:
-            # No timestamp -> inactive
-            inactive.append(ca['name'])
+            # No timestamp -> offline
+            offline.append(ca['name'])
 
     return {
         "threshold_seconds": threshold_seconds,
-        "active_count": len(active),
-        "inactive_count": len(inactive),
-        "active": active,
-        "inactive": inactive,
+        "online_count": len(online),
+        "offline_count": len(offline),
+        "online": online,
+        "offline": offline,
         "last_capture_completed": timestamps
     }
 
-# get the active inactive camera
+# get the active offline camera
 def get_camera_activity_map(threshold_seconds: Optional[int] = None):
     if threshold_seconds is None:
-        threshold_seconds = settings.CAPTURE_INTERVAL * 2
+        threshold_seconds = settings.CAPTURE_INTERVAL * 3
 
     now = datetime.now()
     activity_map = {}
@@ -415,7 +406,7 @@ def get_camera_activity_map(threshold_seconds: Optional[int] = None):
         key = f"camera:{name}:last_capture_completed"
         ts = redis_client.get(key)
 
-        status = "inactive"
+        status = "offline"
 
         if ts:
             try:

@@ -1,9 +1,5 @@
-<<<<<<< HEAD
-# docker-camera-dashboard
-=======
 
-
-# Docker Camera Dashboard 🚦
+# Docker Camera Dashboard 
 
 **Dockerized services to capture images from RTSP cameras, generate timelapse, and serve a simple API/UI to view feeds.**
 
@@ -218,7 +214,7 @@ python main.py
 
 Contributions are welcome — open issues or create a PR with changes. Keep changes small and documented.
 
-### CI: Secret Scan (GitHub Actions) 🔒
+### CI: Secret Scan (GitHub Actions)
 
 This repository includes a GitHub Actions workflow that scans for accidental commits of secrets and sensitive files. The check runs on push and pull requests and will fail the job if:
 

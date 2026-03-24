@@ -1,14 +1,10 @@
 import httpx
 import logging
-import time
-from httpx import DigestAuth
+
 from utils.rest import RestClient
-from datetime import datetime, timedelta, timezone
-from typing import Optional
 
-
-attributes = [attr for attr in dir(RestClient) if not attr.startswith('__')]
-print(attributes)
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +90,7 @@ class Opencast(object):
                 return None
         return None
 
-    def get_cameras(self) -> httpx.Response:
+    def get_capture_agent_capabilities(self) -> httpx.Response:
         """Fetch the list of cameras from the Opencast server.
 
         Returns:
@@ -106,7 +102,7 @@ class Opencast(object):
         response.raise_for_status()
         return response
 
-    def get_cainfo(self) -> httpx.Response:
+    def get_ca_names(self) -> httpx.Response:
         """Fetch the cainfo of all cameras from Opencast Server.
 
         Retuens:
@@ -130,50 +126,116 @@ class Opencast(object):
         response.raise_for_status()
         return response
 
-    def get_recordings(self, limit: int = -1) -> httpx.Response:
-        """
-        Fetch scheduled events/recordings for **today** in the fixed window:
-        08:00:00.000Z to 21:59:59.999Z (UTC).
+    def get_events(self, filter:str = '', seriesId:str = '',
+                    start_date:str = '', end_date:str = '',
+                    sort:str = 'date:ASC,title:ASC',
+                    withPublications:bool = True,
+                    withAcl:bool = False,
+                    withMetadata:bool = False,
+                    withScheduling:bool = False,
+                    onlyWithWriteAccess:bool = False,
+                    sign:bool = False,
+                    offset:int = 0,
+                    limit:int = 1000):
 
-        Args:
-            limit: Max number of results (-1 = no limit)
+        filter_ar = []
+        if filter:
+            filter_ar.append(filter)
 
-        Returns:
-            httpx.Response object from the Opencast admin-ng/events endpoint
-        """
-        now_utc = datetime.now(timezone.utc)
+        if seriesId:
+            filter_ar.append(f"series:{seriesId}")
 
-        # Start: today at 08:00:00.000 UTC
-        start_of_day = now_utc.replace(hour=8, minute=0, second=0, microsecond=0)
+        if start_date and end_date:
+            filter_ar.append(f"start:{start_date}/{end_date}")
 
-        # End: today at 21:59:59.999 UTC
-        end_of_day = now_utc.replace(hour=21, minute=59, second=59, microsecond=999000)
+        filter = ','.join(filter_ar)
 
-        # Ensure end is still on the same day (edge case if called very late)
-        if end_of_day < start_of_day:
-            end_of_day = start_of_day + timedelta(hours=13, minutes=59, seconds=59, milliseconds=999)
-
-        # ISO 8601 strings with Z and millisecond precision
-        start_str = start_of_day.isoformat(timespec="milliseconds")
-        end_str   = end_of_day.isoformat(timespec="milliseconds")
-
-        # Final filter string (without "startDate:" prefix here — added directly in URL)
-        date_range = f"{start_str}%2F{end_str}"
-
-        # Build URL with the exact format you want
-        url = (
-            f"{self.server}/admin-ng/event/events.json"
-            f"?limit={limit}"
-            f"&filter=startDate:{date_range}"
-        )
-
-        print(f"Fetching today's scheduled events with URL: {url}")
-        print(f"  Date range: {start_str} / {end_str}")
+        params = {
+            "filter": filter,
+            "sort": sort,
+            "withpublications": "true" if withPublications else "false",
+            "withacl": "true" if withAcl else "false",
+            "withmetadata": "true" if withMetadata else "false",
+            "withscheduling": "true" if withScheduling else "false",
+            "onlyWithWriteAccess": "true" if onlyWithWriteAccess else "false",
+            "sign": "true" if sign else "false",
+            "offset": offset,
+            "limit": limit
+        }
 
         client = self.create_digest_client()
+        resp = client.get(self._full_url(f'{self.server}/api/events'), params=params)
+        if resp and getattr(resp, 'status_code', None) == 200:
+            try:
+                return resp.json()
+            except Exception:
+                return None
 
-        response = client.get(url)
-        response.raise_for_status()
+        return None
 
-        # Return the full URL string (as requested)
-        return url
+class CaptureAgent:
+    def __init__(self, data: Dict[str, Any]):
+        self._raw = data
+
+        self.name: str = data.get("name")
+        self.state: str = data.get("state")
+        self.url: str = data.get("url")
+        self.time_since_last_update: int = data.get("time-since-last-update", 0)
+
+        try:
+            last_dt = datetime.now() - timedelta(seconds=self.time_since_last_update)
+            self.last_updated = last_dt.strftime('%Y-%m-%d %H:%M:%S')
+        except OverflowError:
+            self.last_updated = None
+
+        self._capabilities: Dict[str, Any] = {}
+
+        raw_items = data.get("capabilities", {}).get("item", [])
+
+        # ---- NORMALIZATION ----
+        if isinstance(raw_items, dict):
+            raw_items = [raw_items]  # single item → list
+        elif isinstance(raw_items, str):
+            raw_items = []  # garbage case safeguard
+
+        # ---- SAFE PARSE ----
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue  # skip junk safely
+
+            key = item.get("key")
+            value = item.get("value")
+
+            if key:
+                self._capabilities[key] = value
+
+    # ---- API ----
+
+    def get(self, key: str, default: Optional[Any] = None) -> Any:
+        return self._raw.get(key, default)
+
+    def get_capability(self, key: str, default: Optional[Any] = None) -> Any:
+        return self._capabilities.get(key, default)
+
+    def has_capability(self, key: str) -> bool:
+        return key in self._capabilities
+
+    def all_capabilities(self) -> Dict[str, Any]:
+        return self._capabilities
+
+    def device_names(self) -> list[str]:
+        names = self.get_capability("capture.device.names", "")
+        return [n.strip() for n in names.split(",") if n]
+
+    def __repr__(self):
+        return f"<CaptureAgent name={self.name} state={self.state}>"
+
+    def get_dict(self, display:str = ''):
+        return {
+            'name' : self.name,
+            'display': display if display else self.name,
+            'state' : self.state,
+            'url' : self.url,
+            'time_since_last_update' : self.time_since_last_update,
+            'last_updated': self.last_updated if self.last_updated else ''
+        }

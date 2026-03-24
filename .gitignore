@@ -4,6 +4,7 @@
 secrets/*
 !secrets/*.example
 !secrets/.gitkeep
+!secrets/users-example.cfg
 
 # Local data and generated artifacts
 shared_volume/*
@@ -12,6 +13,7 @@ shared_volume/*
 __pycache__/
 *.py[cod]
 .venv
+.ruff_cache
 .requirements.sha256
 
 # VSCode

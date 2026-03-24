@@ -100,6 +100,24 @@ async function refreshData() {
         state.activityData = await activityRes.json();
         const fullNamesMap = (await fullNameRes.json())?.cameras || {};
 
+        // log cam changes here
+        if (state.camData.recent_changes) {
+            console.log("Recent changes detected!");
+            console.log("Added:", state.camData.recent_changes.added);
+            console.log("Removed:", state.camData.recent_changes.removed);
+            console.log("Updated:", state.camData.recent_changes.updated);
+        }
+
+        // Compare version with previous one (store in localStorage or state)
+        const prevVersion = localStorage.getItem('cameras_version');
+        if (prevVersion && prevVersion !== state.camData.version) {
+            console.log("Data changed! → refresh UI");
+            // Update your table / list / video players here
+            renderCameras(state.camData.cameras);
+        }
+
+        localStorage.setItem('cameras_version', state.camData.version);
+
         // process cams here
         const onlineNames = state.activityData.online || [];
         const offlineNames = state.activityData.offline || [];
@@ -159,7 +177,7 @@ async function refreshData() {
 }
 
 // =====================================================
-// RENDER CAMERAS ONLY
+// RENDER CAMERAS ONLY – with cache-busting
 // =====================================================
 function renderCameras() {
     const grid = document.getElementById("cameraGrid");
@@ -167,21 +185,19 @@ function renderCameras() {
 
     grid.innerHTML = "";
 
-    // Convert the Map to an array of [key, value] pairs, sort by key, then iterate
     const sortedEntries = Array.from(state.cameraMap.entries()).sort((a, b) => {
-        // Sort alphabetically by key (a[0] and b[0] are the keys)
         return a[0].localeCompare(b[0]);
     });
 
-    sortedEntries.forEach((line) => {
-        normalizedName = line[0];
-        item = line[1];
-
+    sortedEntries.forEach(([normalizedName, item]) => {
         const col = document.createElement("div");
         col.className = "col-xl-3 col-lg-4 col-md-6 col-sm-12 camera-col";
 
         const camStatusLower = item.camera_status?.toLowerCase() || "offline";
         const caStatusLower = item.capture_status?.toLowerCase() || "unknown";
+
+        // ← CACHE BUSTING: unique timestamp on every render
+        const cacheBuster = `?t=${Date.now()}`;
 
         col.innerHTML = `
         <div class="card camera-card shadow-sm w-100 camera-item"
@@ -190,20 +206,21 @@ function renderCameras() {
              data-name="${normalizedName}"
              data-fullname="${item.full_name.toLowerCase()}">
 
-            <div class="camera-image-wrapper"
-                 data-name="${item.name}">
-
-                <img src="/cams/static/images/${item.name}_thumb.jpg"
-                     class="camera-thumb img-fluid w-100"
+            <div class="camera-image-wrapper" data-name="${item.name}">
+                <img src="/cams/static/images/${item.name}_thumb.jpg${cacheBuster}"
+                     class="camera-thumb img-fluid w-100 ${camStatusLower}"
                      alt="${item.name}"
                      onerror="this.src='/cams/resources/images/image_not_found_uct.png';">
+
+                ${camStatusLower !== "online" ? `
+                    <div class="cross-overlay"></div>
+                ` : ""}
             </div>
 
             <div class="card-body d-flex flex-column">
                 <div class="row gx-2 align-items-start">
                     <div class="col-8">
                         <h5 class="card-title mb-1 text-break">${item.name}</h5>
-                        <div class="text-muted small text-break">${item.full_name}</div>
                     </div>
                     <div class="col-4 text-end small">
                         <div class="row">
@@ -213,13 +230,13 @@ function renderCameras() {
                         </div>
                     </div>
                 </div>
+                <div class="text-muted small text-break mt-2">${item.full_name}</div>
             </div>
         </div>
         `;
 
         grid.appendChild(col);
 
-        // Store DOM ref
         state.cameraMap.set(normalizedName, {
             ...item,
             root: col.querySelector(".camera-item"),
@@ -234,7 +251,7 @@ function renderCameras() {
 }
 
 // =====================================================
-// RENDER AGENTS ONLY
+// RENDER AGENTS ONLY (unchanged)
 // =====================================================
 function renderAgents() {
     const grid = document.getElementById("cameraGrid");
@@ -273,7 +290,6 @@ function renderAgents() {
 
         grid.appendChild(col);
 
-        // Store DOM ref
         state.agentMap.set(normalizedName, {
             ...item,
             root: col.querySelector(".camera-item"),
@@ -369,7 +385,7 @@ document.addEventListener("click", e => {
 });
 
 // =====================================================
-// CAMERA MODAL – Fetch large/current image from API
+// CAMERA MODAL – Block modal if placeholder + pass timestamp
 // =====================================================
 function attachCardModals() {
     document.removeEventListener("click", handleModalClick);
@@ -380,14 +396,26 @@ async function handleModalClick(e) {
     const wrapper = e.target.closest(".camera-image-wrapper");
     if (!wrapper) return;
 
+    const img = wrapper.querySelector("img.camera-thumb");
+    if (!img) return;
+
+    // Block modal if placeholder is shown
+    if (img.src.includes("image_not_found_uct.png")) {
+        console.log(`Modal blocked: placeholder image for ${wrapper.dataset.name}`);
+        return;
+    }
+
     const cameraName = wrapper.dataset.name;
     const fullName = wrapper.dataset.fullname || cameraName || "Camera";
     console.log(`Modal clicked for camera: ${cameraName}`);
 
-    let largeImageUrl = `/cams/static/images/${cameraName}.jpg`; // default fallback
+    // Add timestamp to get freshest image
+    const timestamp = Date.now();
+    let largeImageUrl = `/cams/static/images/${cameraName}.jpg`; // fallback
 
     try {
-        const response = await fetch(`/cams/${cameraName}/current`);
+        const url = `/cams/${cameraName}/current?t=${timestamp}`;
+        const response = await fetch(url);
         if (response.ok) {
             const data = await response.json();
             largeImageUrl = data.image_url || largeImageUrl;
@@ -416,7 +444,6 @@ function openCameraModalWithRange(title, cameraName, largeImageUrl) {
 
     titleEl.textContent = title;
 
-    // Use fetched large/current image
     mainImg.src = largeImageUrl;
     mainImg.style.width = "100%";
     mainImg.style.height = "auto";
@@ -431,49 +458,6 @@ function openCameraModalWithRange(title, cameraName, largeImageUrl) {
 
     thumbs.innerHTML = "";
     thumbs.style.display = "none";
-
-    // let modalVideo = document.getElementById("modalVideo");
-    // if (!modalVideo) {
-    //     modalVideo = document.createElement("video");
-    //     modalVideo.id = "modalVideo";
-    //     modalVideo.className = "w-100 rounded shadow mt-3";
-    //     modalVideo.style.display = "none";
-    //     modalVideo.muted = true;
-    //     modalVideo.controls = true;
-    //     modalVideo.loop = false;
-    //     modalVideo.innerHTML = `<source src="${webmPath}" type="video/webm">`;
-    //     mainImg.after(modalVideo);
-    // } else {
-    //     const source = modalVideo.querySelector("source");
-    //     if (source) source.src = webmPath;
-    //     modalVideo.load();
-    //     modalVideo.style.display = "none";
-    // }
-
-    // let ctaContainer = document.getElementById("timelapseCta");
-    // if (!ctaContainer) {
-    //     ctaContainer = document.createElement("div");
-    //     ctaContainer.id = "timelapseCta";
-    //     ctaContainer.className = "text-center mt-4";
-
-    //     const btn = document.createElement("button");
-    //     btn.textContent = "Play Timelapse Video";
-    //     btn.className = "btn btn-primary btn-lg";
-    //     btn.addEventListener("click", () => {
-    //         mainImg.style.display = "none";
-    //         modalVideo.style.display = "block";
-    //         modalVideo.currentTime = 0;
-    //         modalVideo.play().catch(e => {
-    //             console.error("WebM play failed:", e);
-    //             alert("Could not play video.");
-    //             modalVideo.style.display = "none";
-    //             mainImg.style.display = "block";
-    //         });
-    //     });
-
-    //     ctaContainer.appendChild(btn);
-    //     thumbs.after(ctaContainer);
-    // }
 
     modal.show();
 }
@@ -511,6 +495,62 @@ function updateCACounters(agentData) {
     setCount("count-ca-unknown", counts.unknown);
     setCount("count-ca-offline", counts.offline);
 }
+
+// search
+document.addEventListener("DOMContentLoaded", function () {
+    const searchInput = document.getElementById("cameraSearch");
+    const cameraGrid = document.getElementById("cameraGrid");
+
+    if (!searchInput || !cameraGrid) {
+        // console.warn("Search input or cameraGrid not found");
+        return;
+    }
+
+    // We'll re-query cards every time because renderCameras() adds them dynamically
+    function filterCameras() {
+        const query = searchInput.value.toLowerCase().trim();
+        // console.log(`Searching for: "${query}"`);
+
+        // Re-query all cards (important – cards are added after page load!)
+        const cameraCols = cameraGrid.querySelectorAll(".camera-col");
+
+        let visibleCount = 0;
+
+        cameraCols.forEach(col => {
+            const card = col.querySelector(".camera-card");
+            if (!card) return;
+
+            const name = (card.dataset.name || "").toLowerCase();
+            const fullname = (card.dataset.fullname || "").toLowerCase();
+
+            const matches = !query ||
+                name.includes(query) ||
+                fullname.includes(query);
+
+            col.style.display = matches ? "" : "none";
+
+            if (matches) visibleCount++;
+        });
+
+        // console.log(`Found ${visibleCount} matching cameras out of ${cameraCols.length}`);
+
+        // Optional: show "No results" message
+        const noResults = document.getElementById("noResults");
+        if (noResults) {
+            noResults.style.display = visibleCount === 0 && query ? "block" : "none";
+        }
+    }
+
+    // Add debounce so it doesn't run 100 times per second while typing
+    let debounceTimer;
+    searchInput.addEventListener("input", function () {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(filterCameras, 250); // 250ms delay
+    });
+
+    // Run once on load
+    filterCameras();
+});
 
 // =====================================================
 // INITIAL LOAD + AUTO REFRESH

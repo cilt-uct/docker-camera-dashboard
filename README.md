@@ -1,5 +1,4 @@
-
-# Docker Camera Dashboard 
+# Docker Camera Dashboard
 
 **Dockerized services to capture images from RTSP cameras, generate timelapse, and serve a simple API/UI to view feeds.**
 
@@ -26,7 +25,7 @@
 
 This project captures periodic still images from RTSP cameras, stores images to a shared volume, generates timelapse, and exposes a small HTTP API + UI to view the latest images and timelapses. It is designed to run via Docker Compose and uses Redis for lightweight coordination/status.
 
-✅ Ideal for monitoring multiple fixed cameras where streaming full video is heavy or unnecessary.
+Ideal for monitoring multiple fixed cameras where streaming full video is heavy or unnecessary.
 
 ---
 
@@ -54,15 +53,16 @@ All services share a `shared_volume` that contains `images/` and `timelapse/` fo
 1. Copy or create a `.env` file in the repository root (see **Configuration** below). You can use the provided example:
 
 ```bash
-cp .env.example .env
+cp .env.template .env
 ```
 
 2. Place secret files referenced by `docker-compose.yml` (e.g., the `passwords` file and `redis_password`). Examples are in the `secrets/` folder:
 
 ```bash
-# Copy example secrets to where Docker Compose expects them (adjust paths or compose files as needed)
-cp secrets/passwords.example /usr/local/serverconfig/camera_dashboard.cfg
+# Copy example filest where Docker Compose expects them (adjust paths or compose files as needed)
+cp secrets/camera_dashboard.example /usr/local/serverconfig/camera_dashboard.cfg
 cp secrets/redis_password.example /usr/local/serverconfig/camera_dashboard_redis_password
+cp secrets/users-example.cfg /usr/local/serverconfig/users.cfg
 ```
 
 Alternatively, point the secrets to a local path or override `docker-compose.yml` for development.
@@ -116,25 +116,9 @@ Compose uses secrets for Redis and service passwords as configured in `docker-co
 
 ---
 
-## Cameras configuration
+### Import from Opencast (TODO REVIEW THIS)
 
-Cameras are now decoupled from the code and are loaded (in order of preference) from:
-
-1. A JSON file specified by `CAMERAS_FILE` (default: `/run/secrets/cameras.json`) — place your camera list here and keep it out of version control (there is an example at `secrets/cameras.json.example`).
-2. A Redis key specified with `CAMERAS_REDIS_KEY` (default: `camera_list`) — useful to update the list at runtime.
-3. The built-in `DEFAULT_CAMERAS` fallback.
-
-The cameras file should contain a JSON array of objects with the shape:
-
-```json
-[
-  { "name": "room1", "rtsp_url": "rtsp://room1.local/cam01/axis-media/media.amp" }
-]
-```
-
-### Import from Opencast
-
-We provide a helper to import cameras from an Opencast server and save them to Redis:
+We provide a helper to import cameras from an Opencast server and save them:
 
 ```bash
 # Fetch cameras from Opencast and store in Redis
@@ -238,10 +222,17 @@ This repository includes a recommended `.pre-commit-config.yaml` for local check
 Install and run pre-commit locally:
 
 ```bash
+# Best to run this all in virtual environment
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
 # Install pre-commit (Python/pip recommended) and ruff
 pip install pre-commit ruff
+
 # Install the git hooks
 pre-commit install
+
 # Run hooks against all files
 pre-commit run --all-files
 ```
@@ -263,4 +254,3 @@ This project is licensed under the Educational Community License, Version 2.0 (*
 Happy monitoring! 🔭
 
 ```
->>>>>>> b0ea2c2 (Initial commit - adding project files)

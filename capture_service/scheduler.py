@@ -1,27 +1,109 @@
 import asyncio
 import os
-import time
 import socket
-from urllib.parse import urlparse
+import time
 import redis.asyncio as redis
 
+from urllib.parse import urlparse
+from dateutil.parser import parse as parse_dt
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from subprocess import call
 
 from pathlib import Path
 
-# Configuration
-from utils.settings import FetchSettings, logger, cameras
+from utils.settings import FetchSettings, logger
+from utils.database import create_db
+from utils.camera import CameraRepository
+from utils.schemas import CameraCreate, CameraUpdate
+
+from opencast.opencast import CaptureAgent
+
 settings = FetchSettings()
 settings.TITLE = "Fetch Camera Images Service"
 
-redis_client = redis.Redis(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    password=settings.REDIS_PASSWORD, #This line references a path for secret loading, but does not embed a secret.
-    decode_responses=True
-)
+# Utility Functions
+# -----------------------------------------------
+def replace_rtspt(url: str) -> str:
+    if not url:
+        return url
+    return url.replace("rtspt://", "rtsp://")
+
+def str_to_dt_or_none(s: str):
+    if not s:
+        return None
+    try:
+        return parse_dt(s)
+    except Exception:
+        return None
+
+def get_redis(settings):
+    return redis.Redis(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        password=settings.REDIS_PASSWORD, #This line references a path for secret loading, but does not embed a secret.
+        decode_responses=True
+    )
+
+async def fetch_cameras_from_redis(rc) -> list[dict]:
+    """Get all camera details from Redis as a list of dicts."""
+    camera_names = await rc.smembers("camera:index")
+    cameras = []
+
+    for name in camera_names:
+        cam_hash = await rc.hgetall(f"camera:{name}")
+        if cam_hash:
+            cameras.append({
+                "name": cam_hash.get("name"),
+                "url": cam_hash.get("url"),
+                "enabled": cam_hash.get("enabled") == "True"
+            })
+    return cameras
+
+async def mark_camera_dirty(rc, camera_name: str):
+    """
+    Add the camera to the 'camera:dirty' set in Redis
+    so it can be processed later for DB updates.
+    """
+    try:
+        await rc.sadd("camera:dirty", camera_name)
+        logger.debug(f"Marked camera {camera_name} as dirty")
+    except Exception as e:
+        logger.warning(f"Failed to mark camera {camera_name} as dirty: {e}")
+
+def normalize_agent_status(status: str) -> str:
+    if not status:
+        return "unknown"
+    return status.split(".")[-1].lower()
+
+def format_datetime_for_redis(dt_value):
+    """Convert datetime to string format suitable for Redis storage"""
+    if dt_value is None:
+        return None
+
+    if isinstance(dt_value, datetime):
+        # Make it timezone-aware if it isn't already
+        if dt_value.tzinfo is None:
+            # Use the system's local timezone
+            dt_value = dt_value.astimezone()
+
+        return dt_value.isoformat()
+
+    if isinstance(dt_value, str):
+        # Handle UTC format with Z
+        if dt_value.endswith('Z'):
+            try:
+                utc_time = datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+                local_time = utc_time.astimezone()
+                return local_time.isoformat()
+            except ValueError:
+                pass
+        return dt_value
+
+    return str(dt_value)
+
+# Capture & Timelapse
+# -----------------------------------------------
 
 async def is_camera_alive(rtsp_url, timeout=2):
     """
@@ -46,20 +128,21 @@ async def is_camera_alive(rtsp_url, timeout=2):
 
 async def _capture_one(loop, ca, settings, semaphore, rc):
     """
-    Capture one camera image, skipping if the camera is offline.
-    `rc` is an async Redis client created per run to avoid cross-loop attachment errors.
+    Capture a single camera image with concurrency control.
     """
     async with semaphore:
 
         # Record when a capture was attempted
-        iso_ts = datetime.now().isoformat()
+        iso_ts = datetime.now().astimezone().isoformat()
         try:
-            await rc.set(f"camera:{ca['name']}:last_capture_attempt", iso_ts)
-            logger.debug(f"Set redis key camera:{ca['name']}:last_capture_attempt={iso_ts}")
+            await rc.hset(f"camera:{ca['name']}", "last_capture_attempt", iso_ts)
+            await mark_camera_dirty(rc, ca['name'])
+
+            logger.debug(f"Set last_capture_attempt for camera:{ca['name']}={iso_ts}")
         except Exception as e:
             logger.warning(f"Failed to set last_capture_attempt for {ca['name']}: {e}")
 
-        if not await is_camera_alive(ca["rtsp_url"]):
+        if not await is_camera_alive(ca["url"]):
             logger.warning(f"[SKIP] Camera {ca['name']} not reachable")
             return
 
@@ -74,7 +157,7 @@ async def _capture_one(loop, ca, settings, semaphore, rc):
         ret = await loop.run_in_executor(
             None,
             call,
-            ["./scripts/capture_images.sh", ca['rtsp_url'],
+            ["./scripts/capture_images.sh", ca['url'],
                                             ca['name'],
                                             str(output_image),
                                             str(thumb_image),
@@ -83,14 +166,16 @@ async def _capture_one(loop, ca, settings, semaphore, rc):
 
         # If the capture command succeeded, record completion timestamp
         if ret == 0:
-            iso_ts = datetime.now().isoformat()
+            iso_ts = datetime.now().astimezone().isoformat()
             try:
-                await rc.set(f"camera:{ca['name']}:last_capture_completed", iso_ts)
-                logger.debug(f"Set redis key camera:{ca['name']}:last_capture_completed={iso_ts}")
+                await rc.hset(f"camera:{ca['name']}", "last_capture_completed", iso_ts)
+                await mark_camera_dirty(rc, ca['name'])
+
+                logger.debug(f"Set last_capture_completed for camera:{ca['name']}={iso_ts}")
             except Exception as e:
                 logger.warning(f"Failed to set last_capture_completed for {ca['name']}: {e}")
         else:
-            logger.warning(f"[CAPTURE] capture script returned {ret} for {ca['name']}")
+            logger.warning(f"[CAPTURE] script returned {ret} for {ca['name']}")
 
 async def capture_images(settings):
     """
@@ -98,21 +183,17 @@ async def capture_images(settings):
     and semaphore-limited concurrency.
     Uses a per-run async Redis client so tasks don't share a client bound to a different loop.
     """
+
     loop = asyncio.get_running_loop()
     semaphore = asyncio.Semaphore(settings.BATCH_SIZE)
 
     # Create an async Redis client for this run
-    rc = redis.Redis(
-        host=settings.REDIS_HOST,
-        port=settings.REDIS_PORT,
-        password=settings.REDIS_PASSWORD, #This line references a path for secret loading, but does not embed a secret.
-        decode_responses=True
-    )
+    rc = get_redis(settings)
 
     try:
-        # Process cameras in batches
-        for i in range(0, len(cameras), settings.BATCH_SIZE):
-            batch = cameras[i:i + settings.BATCH_SIZE]
+        all_cameras = await fetch_cameras_from_redis(rc)
+        for i in range(0, len(all_cameras), settings.BATCH_SIZE):
+            batch = all_cameras[i:i + settings.BATCH_SIZE]
             tasks = [
                 asyncio.create_task(_capture_one(loop, ca, settings, semaphore, rc))
                 for ca in batch
@@ -121,7 +202,7 @@ async def capture_images(settings):
             await asyncio.gather(*tasks)
 
             # Delay before starting the next batch
-            if i + settings.BATCH_SIZE < len(cameras):
+            if i + settings.BATCH_SIZE < len(all_cameras):
                 logger.info(f"Waiting {settings.BATCH_DELAY}s before next batch...")
                 await asyncio.sleep(settings.BATCH_DELAY)
 
@@ -150,20 +231,26 @@ async def _generate_timelapse(loop, ca, settings, semaphore, rc):
 
         output_base.parent.mkdir(parents=True, exist_ok=True)
 
-        # Record when a timelapse generation was started
-        iso_ts = datetime.now().isoformat()
-        try:
-            await rc.set(f"camera:{ca['name']}:last_timelapse_run", iso_ts)
-            logger.debug(f"Set redis key camera:{ca['name']}:last_timelapse_run={iso_ts}")
-        except Exception as e:
-            logger.warning(f"Failed to set last_timelapse_run for {ca['name']}: {e}")
-
         logger.info(f"[Timelapse] Generating WebM+MP4 for {ca['name']}")
-        await loop.run_in_executor(
+        ret = await loop.run_in_executor(
             None,
             call,
             ["./scripts/generate_timelapse.sh", str(image_dir), ca['name'], str(output_base), str(logfile)]
         )
+
+        # If the capture command succeeded, record completion timestamp
+        if ret == 0:
+            iso_ts = datetime.now().astimezone().isoformat()
+            try:
+                await rc.hset(f"camera:{ca['name']}", "last_timelapse_run", iso_ts)
+                await mark_camera_dirty(rc, ca['name'])
+
+                logger.debug(f"Set last_timelapse_run for camera:{ca['name']}={iso_ts}")
+            except Exception as e:
+                logger.warning(f"Failed to set last_timelapse_run for {ca['name']}: {e}")
+        else:
+            logger.warning(f"[Timelapse] script returned {ret} for {ca['name']}")
+
 
 async def generate_timelapses(settings):
     """
@@ -175,17 +262,13 @@ async def generate_timelapses(settings):
     semaphore = asyncio.Semaphore(settings.BATCH_SIZE)
 
     # Create an async Redis client for this run
-    rc = redis.Redis(
-        host=settings.REDIS_HOST,
-        port=settings.REDIS_PORT,
-        password=settings.REDIS_PASSWORD, #This line references a path for secret loading, but does not embed a secret.
-        decode_responses=True
-    )
+    rc = get_redis(settings)
 
     try:
         # Process cameras in batches
-        for i in range(0, len(cameras), settings.BATCH_SIZE):
-            batch = cameras[i:i + settings.BATCH_SIZE]
+        all_cameras = await fetch_cameras_from_redis(rc)
+        for i in range(0, len(all_cameras), settings.BATCH_SIZE):
+            batch = all_cameras[i:i + settings.BATCH_SIZE]
             tasks = [
                 asyncio.create_task(_generate_timelapse(loop, ca, settings, semaphore, rc))
                 for ca in batch
@@ -194,7 +277,7 @@ async def generate_timelapses(settings):
             await asyncio.gather(*tasks)
 
             # Delay before next batch
-            if i + settings.BATCH_SIZE < len(cameras):
+            if i + settings.BATCH_SIZE < len(all_cameras):
                 logger.info(f"Waiting {settings.BATCH_DELAY}s before next timelapse batch...")
                 await asyncio.sleep(settings.BATCH_DELAY)
 
@@ -209,6 +292,93 @@ async def generate_timelapses(settings):
                 await rc.connection_pool.disconnect()
             except Exception:
                 pass
+
+# Opencast
+# -----------------------------------------------
+async def update_capture_agent_details(settings):
+    """
+    Load Opencast Capture Agents into Redis, and create missing cameras in DB.
+    """
+    rc = get_redis(settings)
+    engine, AsyncSessionLocal = create_db(settings)
+
+    async with AsyncSessionLocal() as db:
+        repo = CameraRepository(db)
+
+        await rc.set("ca:last_refresh", datetime.now().astimezone().isoformat())
+
+        ca_names = settings.OC.get_ca_names().json()
+        await rc.hset("ca:display", mapping=ca_names)
+
+        response = settings.OC.get_capture_agent_capabilities().json()
+        if "agents" not in response:
+            logger.error("No Capture Agents in response")
+            return
+
+        for data in response['agents']['agent']:
+            ca = CaptureAgent(data)
+
+            # ca:index -> set of capture agent names
+            await rc.sadd("ca:index", ca.name)
+
+            # ca:{name} -> hash of capture agent details
+            await rc.hset(f"ca:{ca.name}", mapping=ca.get_dict(display=ca_names.get(ca.name, '') if ca_names else ''))
+
+            # Check if camera exists
+            cam_obj = await repo.get_by_name(ca.name)
+            url = ca.get_capability('capture.device.presenter.src')
+            if url and 'rtsp' in url and not cam_obj:
+                new_camera = await repo.create(CameraCreate(name=ca.name, url=url, enabled=True))
+                await db.commit()
+
+                # camera:index -> set of names
+                await rc.sadd("camera:index", ca.name)
+
+                # camera:{name} -> hash of camera details
+                cam_dict = {
+                    "id": str(new_camera.id),
+                    "name": new_camera.name,
+                    "url": replace_rtspt(new_camera.url),
+                    "enabled": str(new_camera.enabled),
+                    "last_capture_completed": str(new_camera.last_capture_completed) if new_camera.last_capture_completed else "",
+                    "last_capture_attempt": str(new_camera.last_capture_attempt) if new_camera.last_capture_attempt else "",
+                    "last_timelapse_run": str(new_camera.last_timelapse_run) if new_camera.last_timelapse_run else "",
+                    "updated_at": str(new_camera.updated_at) if new_camera.updated_at else "",
+                }
+                await rc.hset(f"camera:{new_camera.name}", mapping=cam_dict)
+
+                logger.info(f"Created new camera from capture agent: {ca.name}")
+
+        logger.info(f"Updated details for {len(response['agents']['agent'])} CA's")
+
+    await engine.dispose()
+
+async def update_capture_agent_state(settings):
+    """
+    Get the cpature agents current state and update that details
+    """
+    rc = get_redis(settings)
+    await rc.set("ca:last_refresh", datetime.now().astimezone().isoformat())
+
+    response = settings.OC.get_capture_agent_status().json()
+    if "results" not in response:
+        logger.error("No Capture Agents in response")
+        return
+
+    async with rc.pipeline() as pipe:
+        for ca in response['results']:
+            ca['Update']
+            pipe.hset(f"ca:{ca['Name']}", mapping={
+                "state": normalize_agent_status(ca['Status']),
+                "last_updated": format_datetime_for_redis(ca['Update'])
+            })
+        await pipe.execute()
+
+    logger.info(f"Updated states for {len(response['results'])} CA's")
+
+
+# Cleanup
+# -----------------------------------------------
 
 def clean_images(settings):
     """
@@ -236,27 +406,144 @@ def clean_images(settings):
                 except Exception as e:
                     logger.error(f"Error deleting folder {dir_path}: {e}")
 
-if __name__ == "__main__":
-    # Wrap async functions for scheduler
-    def capture_images_sync():
-        asyncio.run(capture_images(settings))
+async def flush_dirty_cameras_to_db(settings):
+    """
+    Take all dirty cameras from Redis and update the DB model.
+    """
+    rc = get_redis(settings)
+    engine, AsyncSessionLocal = create_db(settings)
 
-    def generate_timelapses_sync():
-        asyncio.run(generate_timelapses(settings))
+    async with AsyncSessionLocal() as db:
+        repo = CameraRepository(db)
+        dirty_cameras = await rc.smembers("camera:dirty")
+
+        if not dirty_cameras:
+            return
+
+        for cam_name in dirty_cameras:
+            cam_hash = await rc.hgetall(f"camera:{cam_name}")
+            if not cam_hash:
+                continue
+
+            # Get the camera DB object
+            cam_obj = await repo.get_by_name(cam_name)
+            if not cam_obj:
+                continue
+
+            # Convert Redis hash fields to the Pydantic CameraUpdate model
+            update_data = CameraUpdate(
+                last_capture_attempt=str_to_dt_or_none(cam_hash.get("last_capture_attempt")),
+                last_capture_completed=str_to_dt_or_none(cam_hash.get("last_capture_completed")),
+                last_timelapse_run=str_to_dt_or_none(cam_hash.get("last_timelapse_run"))
+            )
+
+            # Update the DB
+            await repo.update(cam_obj.id, update_data)
+
+        await db.commit()
+
+        # Clear the dirty set after processing
+        await rc.delete("camera:dirty")
+        print(f"Flushed {len(dirty_cameras)} dirty cameras to DB")
+
+    await engine.dispose()
+
+async def clear_redis_on_startup(settings):
+    rc = get_redis(settings)
+
+    # Clear the current database only
+    await rc.flushdb()
+
+    logger.info("Redis cleared on startup")
+
+# Database -> Redis Sync Function
+# -----------------------------------------------
+async def load_cameras_to_redis(settings):
+    """Fetch all cameras from DB and populate Redis on startup."""
+    rc = get_redis(settings)
+    engine, AsyncSessionLocal = create_db(settings)
+
+    async with AsyncSessionLocal() as db:
+        repo = CameraRepository(db)
+        all_cameras = await repo.get_all()
+
+        # Clear previous index
+        await rc.delete("camera:index")
+
+        for cam in all_cameras:
+            # camera:index -> set of names
+            await rc.sadd("camera:index", cam.name)
+
+            # camera:{name} -> hash of camera details
+            cam_dict = {
+                "id": str(cam.id),
+                "name": cam.name,
+                "url": replace_rtspt(cam.url),
+                "enabled": str(cam.enabled),
+                "last_capture_completed": format_datetime_for_redis(cam.last_capture_completed) or "",
+                "last_capture_attempt": format_datetime_for_redis(cam.last_capture_attempt) or "",
+                "last_timelapse_run": format_datetime_for_redis(cam.last_timelapse_run) or "",
+                "updated_at": format_datetime_for_redis(cam.updated_at) or "",
+            }
+            await rc.hset(f"camera:{cam.name}", mapping=cam_dict)
+
+        logger.info(f"Loaded {len(all_cameras)} cameras into Redis")
+
+    await engine.dispose()
+
+
+# Scheduler entry
+# --------------------------
+def capture_images_sync():
+    asyncio.run(capture_images(settings))
+
+def generate_timelapses_sync():
+    asyncio.run(generate_timelapses(settings))
+
+def flush_dirty_sync():
+    asyncio.run(flush_dirty_cameras_to_db(settings))
+
+def update_capture_agent_details_sync():
+    asyncio.run(update_capture_agent_details(settings))
+
+def update_capture_agent_state_sync():
+    asyncio.run(update_capture_agent_state(settings))
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+
+    # --- Startup tasks ---
+    # loop.run_until_complete(clear_redis_on_startup(settings)) # start fresh
+    loop.run_until_complete(load_cameras_to_redis(settings))
+    loop.run_until_complete(update_capture_agent_details(settings))
+    loop.run_until_complete(update_capture_agent_state(settings))
+    logger.info("Startup load complete: cameras + capture agents synced to Redis.")
 
     scheduler = BackgroundScheduler()
-    scheduler.add_job(capture_images_sync, 'interval', seconds=settings.CAPTURE_INTERVAL)
-    scheduler.add_job(generate_timelapses_sync, 'interval', seconds=settings.TIMELAPSE_INTERVAL)
+
+    # Capture jobs for all cameras split into batches
+    scheduler.add_job(capture_images_sync, 'interval', seconds=settings.CAPTURE_INTERVAL, max_instances=1)
+    scheduler.add_job(generate_timelapses_sync, 'interval', seconds=settings.TIMELAPSE_INTERVAL, max_instances=1)
+
+    # Opencast - Get Capture Agent Status
+    scheduler.add_job(update_capture_agent_details_sync, 'interval', hours=1, next_run_time=datetime.now() + timedelta(seconds=30))
+    scheduler.add_job(update_capture_agent_state_sync, 'interval', minutes=5, next_run_time=datetime.now() + timedelta(seconds=40))
+
+    # Cleanup - remove old images and timelapses and write updates to DB
     scheduler.add_job(clean_images, 'interval', args=[settings], days=1, next_run_time=datetime.now() + timedelta(seconds=5))
+    scheduler.add_job(flush_dirty_sync, 'interval', minutes=5, next_run_time=datetime.now() + timedelta(seconds=10))
     scheduler.start()
 
-    start_time = datetime.now().isoformat()
-    asyncio.run(redis_client.set('scheduler_service_start', start_time))
-    logger.info(f"Scheduler started. { start_time}")
-    logger.info(type(redis_client))
+    rc = get_redis(settings)
+    start_time = datetime.now().astimezone().isoformat()
+    loop.run_until_complete(rc.set('scheduler_service_start', start_time))
+    logger.info(f"Scheduler started at {start_time}")
 
     try:
         while True:
             time.sleep(1)
+
     except (KeyboardInterrupt, SystemExit):
+        logger.info("Shutting down scheduler...")
         scheduler.shutdown()
+        loop.run_until_complete(rc.close())

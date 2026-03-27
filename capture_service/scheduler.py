@@ -251,7 +251,6 @@ async def _generate_timelapse(loop, ca, settings, semaphore, rc):
         else:
             logger.warning(f"[Timelapse] script returned {ret} for {ca['name']}")
 
-
 async def generate_timelapses(settings):
     """
     Generate timelapses for all cameras in batches with staggered delay
@@ -324,10 +323,30 @@ async def update_capture_agent_details(settings):
             # ca:{name} -> hash of capture agent details
             await rc.hset(f"ca:{ca.name}", mapping=ca.get_dict(display=ca_names.get(ca.name, '') if ca_names else ''))
 
-            # Check if camera exists
-            cam_obj = await repo.get_by_name(ca.name)
             url = ca.get_capability('capture.device.presenter.src')
-            if url and 'rtsp' in url and not cam_obj:
+
+            if not url or 'rtsp' not in url:
+                logger.warning(f"CA {ca.name} has no capture.device.presenter.src capability, skipping camera creation")
+                continue
+
+            # Check if camera exists in database
+            camera_in_db = await repo.get_by_name(ca.name)
+            camera_in_redis = await rc.hgetall(f"camera:{ca.name}")
+
+            # Camera is in Database, but update the URL if it's different
+            if camera_in_db:
+                if camera_in_db.url != url:
+                    await repo.update(camera_in_db.id, CameraUpdate(url=url))
+                    await db.commit()
+                    logger.info(f"Updated URL for camera {ca.name} in DB")
+
+                if camera_in_redis and camera_in_redis.get("url") != url:
+                    await rc.hset(f"camera:{ca.name}", "url", replace_rtspt(url))
+                    await mark_camera_dirty(rc, ca.name)
+                    logger.info(f"Updated URL for camera {ca.name} in Redis")
+
+            else:
+                # Add camera to Redis and to Database
                 new_camera = await repo.create(CameraCreate(name=ca.name, url=url, enabled=True))
                 await db.commit()
 
@@ -345,8 +364,8 @@ async def update_capture_agent_details(settings):
                     "last_timelapse_run": str(new_camera.last_timelapse_run) if new_camera.last_timelapse_run else "",
                     "updated_at": str(new_camera.updated_at) if new_camera.updated_at else "",
                 }
-                await rc.hset(f"camera:{new_camera.name}", mapping=cam_dict)
 
+                await rc.hset(f"camera:{new_camera.name}", mapping=cam_dict)
                 logger.info(f"Created new camera from capture agent: {ca.name}")
 
         logger.info(f"Updated details for {len(response['agents']['agent'])} CA's")
@@ -355,7 +374,7 @@ async def update_capture_agent_details(settings):
 
 async def update_capture_agent_state(settings):
     """
-    Get the cpature agents current state and update that details
+    Get the capture agents current state and update that details
     """
     rc = get_redis(settings)
     await rc.set("ca:last_refresh", datetime.now().astimezone().isoformat())
@@ -367,10 +386,13 @@ async def update_capture_agent_state(settings):
 
     async with rc.pipeline() as pipe:
         for ca in response['results']:
-            ca['Update']
+            update_value = ca.get('Update')
+            if update_value is None:
+                update_value = datetime.now().astimezone()
+
             pipe.hset(f"ca:{ca['Name']}", mapping={
                 "state": normalize_agent_status(ca['Status']),
-                "last_updated": format_datetime_for_redis(ca['Update'])
+                "last_updated": format_datetime_for_redis(update_value)
             })
         await pipe.execute()
 
@@ -420,6 +442,7 @@ async def flush_dirty_cameras_to_db(settings):
         if not dirty_cameras:
             return
 
+        processed = 0
         for cam_name in dirty_cameras:
             cam_hash = await rc.hgetall(f"camera:{cam_name}")
             if not cam_hash:
@@ -432,6 +455,7 @@ async def flush_dirty_cameras_to_db(settings):
 
             # Convert Redis hash fields to the Pydantic CameraUpdate model
             update_data = CameraUpdate(
+                url=cam_hash.get("url"),
                 last_capture_attempt=str_to_dt_or_none(cam_hash.get("last_capture_attempt")),
                 last_capture_completed=str_to_dt_or_none(cam_hash.get("last_capture_completed")),
                 last_timelapse_run=str_to_dt_or_none(cam_hash.get("last_timelapse_run"))
@@ -440,11 +464,12 @@ async def flush_dirty_cameras_to_db(settings):
             # Update the DB
             await repo.update(cam_obj.id, update_data)
 
-        await db.commit()
+            # Remove this camera from the dirty set after processing
+            await rc.srem("camera:dirty", cam_name)
+            processed += 1
 
-        # Clear the dirty set after processing
-        await rc.delete("camera:dirty")
-        print(f"Flushed {len(dirty_cameras)} dirty cameras to DB")
+        await db.commit()
+        print(f"Flushed {processed} dirty cameras to DB")
 
     await engine.dispose()
 
@@ -509,15 +534,17 @@ def update_capture_agent_details_sync():
 def update_capture_agent_state_sync():
     asyncio.run(update_capture_agent_state(settings))
 
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
+async def startup():
+    if settings.REDIS_CLEAN_START:
+        await clear_redis_on_startup(settings) # start fresh
 
-    # --- Startup tasks ---
-    # loop.run_until_complete(clear_redis_on_startup(settings)) # start fresh
-    loop.run_until_complete(load_cameras_to_redis(settings))
-    loop.run_until_complete(update_capture_agent_details(settings))
-    loop.run_until_complete(update_capture_agent_state(settings))
+    await load_cameras_to_redis(settings)
+    await update_capture_agent_details(settings)
+    await update_capture_agent_state(settings)
     logger.info("Startup load complete: cameras + capture agents synced to Redis.")
+
+if __name__ == "__main__":
+    asyncio.run(startup())
 
     scheduler = BackgroundScheduler()
 
@@ -536,7 +563,7 @@ if __name__ == "__main__":
 
     rc = get_redis(settings)
     start_time = datetime.now().astimezone().isoformat()
-    loop.run_until_complete(rc.set('scheduler_service_start', start_time))
+    asyncio.run(rc.set('scheduler_service_start', start_time))
     logger.info(f"Scheduler started at {start_time}")
 
     try:
@@ -546,4 +573,4 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, SystemExit):
         logger.info("Shutting down scheduler...")
         scheduler.shutdown()
-        loop.run_until_complete(rc.close())
+        asyncio.run(rc.close())

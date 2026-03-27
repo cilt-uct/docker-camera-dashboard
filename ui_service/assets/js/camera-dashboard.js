@@ -180,7 +180,7 @@ class CameraDashboard {
             const normalized = this.normalizeName(camera.name);
             this.state.cameraMap.set(normalized, {
                 name: camera.name,
-                full_name: camera.full_name || camera.name,
+                fullname: camera.fullname || camera.name,
                 camera_status: camera.state,
                 status: camera.state,
                 capture_status: "unknown",
@@ -207,7 +207,7 @@ class CameraDashboard {
             const name = this.normalizeName(agent.name);
             this.state.agentMap.set(name, {
                 name: agent.name,
-                full_name: agent.display || agent.name,
+                fullname: agent.display || agent.name,
                 capture_status: this.normalizeAgentStatus(agent.state),
                 status: this.normalizeAgentStatus(agent.state),
                 last_update: agent.last_updated || 0
@@ -228,9 +228,6 @@ class CameraDashboard {
     updateCounters() {
         const camCounts = this.getStateCounts(this.state.camData.cameras);
         const agentCounts = this.getStateCounts(this.state.agentData.agents);
-
-        console.log(camCounts);
-        console.log(agentCounts);
 
         $("#cams-count-all").text(Object.values(camCounts).reduce((sum, val) => sum + val, 0));
         Object.entries(camCounts).forEach(([state, value]) => { $(`#cams-count-${state}`).text(value); });
@@ -266,7 +263,7 @@ class CameraDashboard {
         // Update image
         $img.attr("src", `${$el.data('thumbnail_url') ? $el.data('thumbnail_url')+cacheBuster : '/cams/assets/images/image_not_found_uct.png'}`)
             .attr("class", `card-img-top ${$el.data('camera_status')}`)
-            .attr("alt", $el.data('full_name'))
+            .attr("alt", $el.data('fullname'))
             .on("error", function() {
                 $(this).attr("src", "/cams/assets/images/image_not_found_uct.png");
             });
@@ -277,7 +274,7 @@ class CameraDashboard {
             $el.find('.card').removeClass('border-danger');
         }
         $el.find('.card-title').text($el.data('name'));
-        $el.find('.card-display').text($el.data('full_name'));
+        $el.find('.card-display').text($el.data('fullname'));
         $el.find('.card-status').html(this.getStatusDiv($el.data('camera_status'), 'fa-video', 'Camera Status'));
 
         // Set footer text (format the timestamp nicely)
@@ -302,14 +299,14 @@ class CameraDashboard {
         Array.from(this.state.cameraMap.entries())
             .sort((a, b) => a[0].localeCompare(b[0]))
             .forEach((item) => {
-                if (!$(`#camera-${item[0]}`).exists()) {
+                let name = this.normalizeName(item[0]);
+                if (!$(`#camera-${name}`).exists()) {
                     const card = this.createCameraCard(item[1]);
                     $grid.append(card);
                     item.root = $(card);
                 }
-
-                $(`#camera-${item[0]}`).data(item[1]);
-                this.fillCameraCard($(`#camera-${item[0]}`))
+                $(`#camera-${name}`).data(item[1]);
+                this.fillCameraCard($(`#camera-${name}`))
             });
 
         this.applyCameraFilters();
@@ -401,14 +398,14 @@ class CameraDashboard {
             const $card = $(this);
 
             const name = ($card.data("name") || "").toLowerCase();
-            const fullName = ($card.data("fullname") || "").toLowerCase();
+            const fullname = ($card.data("fullname") || "").toLowerCase();
             const status = ($card.data("status") || "").toLowerCase();
 
             // Search match (partial)
             const matchesSearch =
                 !query ||
                 name.includes(query) ||
-                fullName.includes(query);
+                fullname.includes(query);
 
             // Status match
             const matchesStatus =
@@ -436,14 +433,14 @@ class CameraDashboard {
             const $card = $(this);
 
             const name = ($card.data("name") || "").toLowerCase();
-            const fullName = ($card.data("fullname") || "").toLowerCase();
+            const fullname = ($card.data("fullname") || "").toLowerCase();
             const status = ($card.data("status") || "").toLowerCase();
 
             // Search match (partial)
             const matchesSearch =
                 !query ||
                 name.includes(query) ||
-                fullName.includes(query);
+                fullname.includes(query);
 
             // Status match
             const matchesStatus =
@@ -485,7 +482,7 @@ class CameraDashboard {
         if (!$card.data('image_url')) return;
 
         const cameraName = $card.data("name");
-        const fullName = $card.data("full_name") || cameraName;
+        const fullname = $card.data("fullname") || cameraName;
 
         let largeImageUrl = $card.data('image_url');
         try {
@@ -498,25 +495,28 @@ class CameraDashboard {
             console.error("Failed to fetch current image:", err);
         }
 
-        this.openCameraModal(fullName, cameraName, largeImageUrl);
+        this.openCameraModal(fullname, cameraName, largeImageUrl);
     }
 
     openCameraModal(title, cameraName, imageUrl) {
         const $modal = $(this.selectors.cameraModal);
         if (!$modal.exists()) return;
 
-        const modal = new bootstrap.Modal($modal[0]);
-        $modal.find('.modal-title').html(cameraName !== title ?
-                                            `<span class="text-muted"${cameraName}</span> : ${title}` :
-                                            `${title}`);
         const $mainImg = $modal.find('#modalMainImage');
+        if (!$mainImg.exists()) return;
+
+
+        $modal.find('.modal-title').html(cameraName !== title ?
+                                            `<span class="text-muted">${cameraName}</span> : ${title}` :
+                                            `${title}`);
+
         $mainImg.attr("src", imageUrl).css({ width: "100%", height: "auto", display: "block" })
             .off("error").on("error", () => {
                 $mainImg.attr("src", "/cams/resources/images/image_not_found_uct.png");
             });
 
         $(this.selectors.modalThumbs).hide().empty();
-        modal.show();
+        $modal.modal('show');
     }
 }
 

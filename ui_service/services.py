@@ -60,7 +60,7 @@ async def build_camera(name: str, request: Request, display_names: dict, full: b
 
             return CameraResponse(
                 name=cam_hash.get("name", ""),
-                full_name=display_names.get(name, name),
+                fullname=display_names.get(name, name),
                 state=state,
                 current=str(request.url_for("get_latest_image", camera_name=name)),
                 image_url=image_url,
@@ -80,7 +80,7 @@ async def build_camera(name: str, request: Request, display_names: dict, full: b
             # minimal version (still async-safe)
             return CameraResponseMinimal(
                 name=cam_hash.get("name", ""),
-                full_name=display_names.get(name, name),
+                fullname=display_names.get(name, name),
                 state=state,
                 last_capture_completed=cam_hash.get("last_capture_completed"),
                 last_capture_attempt=cam_hash.get("last_capture_attempt"),
@@ -110,7 +110,7 @@ async def fetch_cameras(request: Request, full: bool = True):
             cameras.append(r)
 
     # remove None results (missing cameras)
-    cameras = [cam for cam in results if cam is not None]
+    cameras = [cam for cam in cameras if cam is not None]
 
     return cameras
 

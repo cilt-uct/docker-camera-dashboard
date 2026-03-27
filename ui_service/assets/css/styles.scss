@@ -1,0 +1,287 @@
+/* Global styles */
+:root {
+    --color-green: #28a745;
+    --color-red: #dc3545;
+    --color-grey: #6c757d;
+    --color-orange: #ffc107;
+    --color-blue: #007bff;
+    --color-white: #fff;
+    --color-black: #000;
+}
+
+body {
+    background-image: url('/cams/assets/images/UCT-logo.png');
+    background-repeat: no-repeat;
+    background-position-x: center;
+    background-position-y: 20px;
+    background-attachment: fixed;
+}
+
+a {
+    text-decoration: none;
+    color: #000;
+}
+
+/* Filtering styles */
+button.btn {
+    border: var(--bs-border-width) solid var(--bs-border-color);
+    padding: 0.3rem;
+}
+
+span.filter-name {
+    font-weight: 500;
+}
+
+@mixin btn-outline($name, $color, $text: null) {
+    .btn-outline-#{$name}:hover,
+    .btn-outline-#{$name}.active {
+        background: $color;
+        @if $text {
+            color: $text;
+        }
+    }
+}
+
+@include btn-outline(online, var(--color-green));
+@include btn-outline(idle, var(--color-green));
+@include btn-outline(active, var(--color-green));
+@include btn-outline(capturing, var(--color-blue));
+@include btn-outline(error, var(--color-red));
+@include btn-outline(offline, var(--color-black), var(--color-white));
+@include btn-outline(inactive, var(--color-black), var(--color-white));
+@include btn-outline(unknown, var(--color-orange));
+
+.container {
+    > nav {
+        margin-top: 20px;
+    }
+    .tab-pane > .card {
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+        border-top-width: 0px;
+    }
+    #cameraFilters, #agentFilters {
+        #cameraSort, #agentSort {
+            .fa-arrow-down-short-wide { display: none; }
+            .fa-arrow-up-short-wide { display: block; }
+        }
+        #cameraSort.asc, #agentSort.asc {
+            .fa-arrow-down-short-wide { display: block; }
+            .fa-arrow-up-short-wide { display: none; }
+        }
+    }
+    #cameraGrid, #agentGrid {
+        display: flex;
+        padding-top: 1.5rem;
+        min-height: 250px;
+        &.is-empty::after {
+            content: "No cameras found";
+            display: block;
+            text-align: center;
+            padding: 20px;
+            color: #888;
+        }
+    }
+    #agentGrid.is-empty::after {
+        content: "No capture agents found";
+    }
+    #cameraGrid {
+        .card {
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
+            .camera-image-wrapper {
+                position: relative;
+                aspect-ratio: 16 / 9;
+                overflow: hidden;
+                .card-img-top {
+                    border-top-left-radius: 0;
+                    border-top-right-radius: 0;
+                    cursor: pointer;
+                }
+                img, video {
+                    height: 180px;
+                    position: absolute;
+                    inset: 0;
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
+                .fa-circle-xmark { display: none; }
+            }
+            .card-img-top.offline {
+                filter: grayscale(100%);
+                opacity: 0.8;
+                cursor: default;
+            }
+            .card-img-top.offline + .fa-circle-xmark {
+                display: block;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                opacity: 0.6;
+                color: #900;
+                font-size: 84px;
+                border-radius: 50%;
+                z-index: 10;
+                pointer-events: none;
+            }
+            .card-body {
+                padding: var(--bs-card-spacer-y) 0 0 0;
+                .card-title {
+                    padding: 0px var(--bs-card-spacer-x);
+                }
+                .card-display {
+                    padding: 0px var(--bs-card-spacer-x);
+                    margin-bottom: 0px;
+                    font-size: 0.875em;
+                    min-height: 1.8rem;
+                }
+                .card-status {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 32px;
+                    .status-offline { color: var(--color-red); }
+                    .status-online { color: var(--color-green); }
+                }
+            }
+            .card-footer {
+                font-size: 80%;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                &.NA { justify-content: center; }
+            }
+        }
+    }
+    #agentGrid {
+        .card {
+            .card-body {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .card-footer {
+                font-size: 80%;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                &.NA { justify-content: center; }
+            }
+        }
+    }
+}
+
+/* Capture Agent statuses */
+@mixin ca-status($name, $color) {
+    .ca-status-#{$name},
+    .status-#{$name} {
+        color: $color;
+    }
+}
+@include ca-status(idle, var(--color-green));
+@include ca-status(capturing, var(--color-blue));
+@include ca-status(error, var(--color-red));
+@include ca-status(offline, var(--color-black));
+@include ca-status(unknown, var(--color-orange));
+
+.footer {
+    background-color: var(--color-grey);
+    color: var(--color-white);
+    margin-right: 0;
+    text-align: center;
+}
+
+/* schedule styles */
+.schedule-wrapper {
+    overflow-x: auto;
+}
+.schedule-header,
+.schedule-row {
+    display: grid;
+    align-items: center;
+    gap: 4px;
+    min-width: 1000px;
+}
+.schedule-header {
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+.schedule-row {
+    margin-bottom: 6px;
+}
+.camera-label {
+    font-weight: 500;
+    padding-right: 6px;
+    font-size: 14px;
+}
+.cell {
+    height: 28px;
+    border-radius: 4px;
+    background: #e5e7eb;
+    &.active { background: #111827; }
+    &.hour { height: 24px; }
+    &:hover {
+        opacity: 0.8;
+        cursor: pointer;
+    }
+}
+.camera-status {
+    font-size: 12px;
+}
+.status-online { color: #16a34a; }
+.status-recording { color: #dc2626; }
+.status-offline { color: #6b7280; }
+.modal-content { width: 74vw; }
+button.no-bg-btn {
+    padding: 0;
+    background: none;
+    border: none;
+}
+.camera-col.hidden {
+    display: none !important;
+}
+/* LOADER */
+@-webkit-keyframes rotate {
+  0% { transform: rotate(0deg); }
+  50% { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes rotate {
+  0% { transform: rotate(0deg); }
+  50% { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
+}
+@-webkit-keyframes rotate2 {
+  0% { transform: rotate(0deg); border-top-color: rgba(0, 0, 0, 0.5); }
+  50% { transform: rotate(180deg); border-top-color: rgba(0, 141, 203, 0.5); }
+  100% { transform: rotate(360deg); border-top-color: rgba(0, 0, 0, 0.5); }
+}
+@keyframes rotate2 {
+  0% { transform: rotate(0deg); border-top-color: rgba(0, 0, 0, 0.5); }
+  50% { transform: rotate(180deg); border-top-color: rgba(0, 141, 203, 0.5); }
+  100% { transform: rotate(360deg); border-top-color: rgba(0, 0, 0, 0.5); }
+}
+.loader {
+  position: relative;
+  margin: 75px auto;
+  width: 150px;
+  height: 150px;
+  display: block;
+  overflow: hidden;
+}
+.loader div { height: 100%; }
+.loader4, .loader4 div {
+  border-radius: 50%;
+  padding: 8px;
+  border: 2px solid transparent;
+  -webkit-animation: rotate linear 3.5s infinite;
+          animation: rotate linear 3.5s infinite;
+  border-radius: 50%;
+  padding: 4px;
+  -webkit-animation: rotate2 4s infinite linear;
+          animation: rotate2 4s infinite linear;
+}
+.loader, .loader * { will-change: transform; }

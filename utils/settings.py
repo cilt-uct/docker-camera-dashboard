@@ -52,6 +52,7 @@ class FetchSettings(BaseSettings):
     REDIS_HOST: str = Field(default='localhost', validation_alias='REDIS_HOST', description='Redis host.')
     REDIS_PASSWORD: str = Field(default='', validation_alias='REDIS_PASSWORD', description='Redis password.')
     REDIS_PORT: int = Field(default=6379, validation_alias='REDIS_PORT', description='Redis port.')
+    REDIS_CLEAN_START: bool = Field(default=False, validation_alias='REDIS_CLEAN_START', description='Whether to clear Redis on startup.')
 
     OC_HOST: str = Field(default='localhost', validation_alias='OC_SERVER', description='Opencast server URL.')
     OC_USER: str = Field(default='opencast', validation_alias='OC_USER', description='Opencast username.')

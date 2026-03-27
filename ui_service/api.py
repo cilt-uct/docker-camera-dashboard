@@ -18,7 +18,7 @@ async def get_cameras(request: Request, response: Response):
     try:
         cameras = await fetch_cameras(request, full=True)
 
-        payload = [c.dict() for c in cameras]
+        payload = [c.model_dump() for c in cameras]
         etag = generate_etag(payload)
         response.headers["ETag"] = f'"{etag}"'
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
@@ -62,7 +62,7 @@ async def get_capture_agent_details(request: Request, response: Response):
     try:
         agents = await fetch_agents()
 
-        payload = [c.dict() for c in agents]
+        payload = [c.model_dump() for c in agents]
 
         etag = generate_etag(payload)
         response.headers["ETag"] = f'"{etag}"'

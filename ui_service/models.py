@@ -4,7 +4,7 @@ from typing import Optional
 # Model for response
 class CameraResponse(BaseModel):
     name: str
-    full_name: str
+    fullname: str
     state: str
     current: str
     image_url: Optional[str] = None
@@ -22,7 +22,7 @@ class CameraResponse(BaseModel):
 
 class CameraResponseMinimal(BaseModel):
     name: str
-    full_name: str
+    fullname: str
     state: str
     # Timestamps — may be None if never set
     last_capture_completed: Optional[str] = None

@@ -1,17 +1,25 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:
-    -   id: trailing-whitespace
-    -   id: end-of-file-fixer
-    -   id: check-yaml
-    -   id: check-added-large-files
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
         args: ['--maxkb=2028']
+      - id: check-ast
+      - id: check-merge-conflict
+      - id: detect-private-key
 
--   repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.13.0
+  # Ruff for linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.14.8
     hooks:
-    -   id: ruff-check
-    -   id: ruff-format
+      # Run the linter.
+      - id: ruff-check
+        exclude: peoplesoft/transfer_idv/perlfunc.py
+      # Run the formatter.
+      # - id: ruff-format

@@ -1,10 +1,9 @@
-secrets: # This line references a path for secret loading, but does not embed a secret.
-  passwords: # This line references a path for secret loading, but does not embed a secret.
-    file: /usr/local/serverconfig/camera_dashboard.cfg   # absolute path is OK - Compose v2 resolves it at runtime
+# These lines references a path for secret loading, but does not embed a secret.
+secrets:
+  passwords:
+    file: /usr/local/serverconfig/camera_dashboard.cfg
   redis_password:
     file: /usr/local/serverconfig/camera_dashboard_redis_password
-  cameras:
-    file: /usr/local/serverconfig/camera_dashboard_cameras.json
 
 services:
   capture_service:
@@ -20,9 +19,9 @@ services:
       - redis
     environment:
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=/run/secrets/redis_password
+      - REDIS_PASSWORD=/run/secrets/redis_password # This line references a path for secret loading, but does not embed a secret.
     secrets:
-      - cameras
+      # - cameras
       - passwords
       - redis_password
 
@@ -41,29 +40,29 @@ services:
       - redis
     environment:
       - REDIS_HOST=redis
-      - REDIS_PASSWORD=/run/secrets/redis_password
+      - REDIS_PASSWORD=/run/secrets/redis_password # This line references a path for secret loading, but does not embed a secret.
     secrets:
-      - cameras
+      # - cameras
       - passwords
       - redis_password
 
+  # the requirepassword flag expects actual password string, workaround read the string from the container passing the flags
   redis:
     image: redis:7
     env_file:
       - ./.env
     volumes:
       - redis_data:/data
-    command:
-    - redis-server
-    - --requirepass
-    - /run/secrets/redis_password   # point to the secret file
-    - --appendonly
-    - "yes"
+      - ./redis-base.conf:/redis-base.conf:ro
+      - ./redis-entrypoint.sh:/redis-entrypoint.sh:ro
     ports:
       - "6379:6379"
     restart: always
+    environment:
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
     secrets:
       - redis_password
+    entrypoint: ["/redis-entrypoint.sh"]
 
 volumes:
   redis_data:

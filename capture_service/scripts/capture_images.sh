@@ -8,7 +8,7 @@ THUMB_IMAGE="$4"
 LOGFILE="$5"
 
 # Hard timeout in seconds
-CAPTURE_TIMEOUT=12
+CAPTURE_TIMEOUT=15
 
 # Thumbnail size for UI
 THUMB_WIDTH=640

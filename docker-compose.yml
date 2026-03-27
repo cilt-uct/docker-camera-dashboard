@@ -53,8 +53,8 @@ services:
       - ./.env
     volumes:
       - redis_data:/data
-    command: >
-      sh -c "redis-server --requirepass \"$(cat /run/secrets/redis_password)\" --appendonly yes"
+      - ./redis-base.conf:/redis-base.conf:ro
+      - ./redis-entrypoint.sh:/redis-entrypoint.sh:ro
     ports:
       - "6379:6379"
     restart: always
@@ -62,6 +62,7 @@ services:
       - REDIS_PASSWORD_FILE=/run/secrets/redis_password
     secrets:
       - redis_password
+    entrypoint: ["/redis-entrypoint.sh"]
 
 volumes:
   redis_data:

@@ -87,7 +87,7 @@ def format_datetime_for_redis(dt_value):
             # Use the system's local timezone
             dt_value = dt_value.astimezone()
 
-        return dt_value.isoformat()
+        return dt_value.isoformat(timespec='seconds')
 
     if isinstance(dt_value, str):
         # Handle UTC format with Z
@@ -95,7 +95,7 @@ def format_datetime_for_redis(dt_value):
             try:
                 utc_time = datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
                 local_time = utc_time.astimezone()
-                return local_time.isoformat()
+                return local_time.isoformat(timespec='seconds')
             except ValueError:
                 pass
         return dt_value
@@ -133,7 +133,7 @@ async def _capture_one(loop, ca, settings, semaphore, rc):
     async with semaphore:
 
         # Record when a capture was attempted
-        iso_ts = datetime.now().astimezone().isoformat()
+        iso_ts = datetime.now().astimezone().isoformat(timespec='seconds')
         try:
             await rc.hset(f"camera:{ca['name']}", "last_capture_attempt", iso_ts)
             await mark_camera_dirty(rc, ca['name'])
@@ -166,7 +166,7 @@ async def _capture_one(loop, ca, settings, semaphore, rc):
 
         # If the capture command succeeded, record completion timestamp
         if ret == 0:
-            iso_ts = datetime.now().astimezone().isoformat()
+            iso_ts = datetime.now().astimezone().isoformat(timespec='seconds')
             try:
                 await rc.hset(f"camera:{ca['name']}", "last_capture_completed", iso_ts)
                 await mark_camera_dirty(rc, ca['name'])
@@ -240,7 +240,7 @@ async def _generate_timelapse(loop, ca, settings, semaphore, rc):
 
         # If the capture command succeeded, record completion timestamp
         if ret == 0:
-            iso_ts = datetime.now().astimezone().isoformat()
+            iso_ts = datetime.now().astimezone().isoformat(timespec='seconds')
             try:
                 await rc.hset(f"camera:{ca['name']}", "last_timelapse_run", iso_ts)
                 await mark_camera_dirty(rc, ca['name'])
@@ -304,7 +304,7 @@ async def update_capture_agent_details(settings):
     async with AsyncSessionLocal() as db:
         repo = CameraRepository(db)
 
-        await rc.set("ca:last_refresh", datetime.now().astimezone().isoformat())
+        await rc.set("ca:last_refresh", datetime.now().astimezone().isoformat(timespec='seconds'))
 
         ca_names = settings.OC.get_ca_names().json()
         await rc.hset("ca:display", mapping=ca_names)
@@ -377,7 +377,7 @@ async def update_capture_agent_state(settings):
     Get the capture agents current state and update that details
     """
     rc = get_redis(settings)
-    await rc.set("ca:last_refresh", datetime.now().astimezone().isoformat())
+    await rc.set("ca:last_refresh", datetime.now().astimezone().isoformat(timespec='seconds'))
 
     response = settings.OC.get_capture_agent_status().json()
     if "results" not in response:
@@ -562,7 +562,7 @@ if __name__ == "__main__":
     scheduler.start()
 
     rc = get_redis(settings)
-    start_time = datetime.now().astimezone().isoformat()
+    start_time = datetime.now().astimezone().isoformat(timespec='seconds')
     asyncio.run(rc.set('scheduler_service_start', start_time))
     logger.info(f"Scheduler started at {start_time}")
 

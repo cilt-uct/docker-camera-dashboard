@@ -15,7 +15,7 @@ from core import settings, redis_client
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # ---- STARTUP ----
-    start_time = datetime.now().astimezone().isoformat()
+    start_time = datetime.now().astimezone().isoformat(timespec='seconds')
 
     try:
         await redis_client.set("ui_service_start", start_time)

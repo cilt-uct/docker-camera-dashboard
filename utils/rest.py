@@ -61,6 +61,7 @@ class RestClient:
                     from httpx import DigestAuth as _HttpxDigestAuth
                     self._auth = _HttpxDigestAuth(user, password)
                 except Exception:
+                    # retry with basic request class
                     import requests
                     from requests.auth import HTTPDigestAuth
                     from requests.adapters import HTTPAdapter
@@ -231,11 +232,13 @@ class RestClient:
             try:
                 self._client.close()
             except Exception:
+                # never let closing the client crash the app
                 pass
         if self._requests_session is not None:
             try:
                 self._requests_session.close()
             except Exception:
+                # never let closing the session crash the app
                 pass
 
     async def aclose(self):
@@ -243,6 +246,7 @@ class RestClient:
             try:
                 await self._async_client.aclose()
             except Exception:
+                # never let closing the async client crash the app
                 pass
 
     # Context manager support (sync and async)

@@ -59,20 +59,6 @@ class Opencast(object):
             backoff_factor=self.backoff_factor,
             headers=headers
         )
-
-        # info = self.get_info()
-        # if not info:
-        #     raise Exception(f"Unexpected response from {self.server}/info/me.json")
-
-        # logging.info(
-        #     f"Authenticated to {self.server} as {info.get('user', {}).get('username')}"
-        # )
-
-        # if 'roles' in info and 'ROLE_API' not in info['roles']:
-        #     raise Exception(
-        #         f"Authenticated user {self.username} does not have ROLE_API"
-        #     )
-
         return self.client
 
     def _full_url(self, path: str) -> str:
@@ -87,6 +73,7 @@ class Opencast(object):
             try:
                 return resp.json()
             except Exception:
+                # if parsing of json fails, return None
                 return None
         return None
 
@@ -169,6 +156,7 @@ class Opencast(object):
             try:
                 return resp.json()
             except Exception:
+                # if parsing of json fails, return None
                 return None
 
         return None

@@ -33,5 +33,6 @@ async def get_db(session_factory) -> AsyncGenerator[AsyncSession, None]:
             yield session
             await session.commit()
         except Exception:
+            # Rollback the session in case of an exception to avoid leaving the session in a bad state
             await session.rollback()
             raise

@@ -35,6 +35,7 @@ def str_to_dt_or_none(s: str):
     try:
         return parse_dt(s)
     except Exception:
+        # if parsing of datetime fails, return None
         return None
 
 def get_redis(settings):
@@ -124,6 +125,7 @@ async def is_camera_alive(rtsp_url, timeout=2):
         conn.close()
         return True
     except Exception:
+        # well some timeout or connection error occurred, so we assume the camera is not alive
         return False
 
 async def _capture_one(loop, ca, settings, semaphore, rc):
@@ -217,6 +219,7 @@ async def capture_images(settings):
             try:
                 await rc.connection_pool.disconnect()
             except Exception:
+                # if pool does not disconnect, just pass
                 pass
 
 async def _generate_timelapse(loop, ca, settings, semaphore, rc):
@@ -290,6 +293,7 @@ async def generate_timelapses(settings):
             try:
                 await rc.connection_pool.disconnect()
             except Exception:
+                # if pool does not disconnect, just pass
                 pass
 
 # Opencast

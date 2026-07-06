@@ -35,6 +35,7 @@ def _attach_uvicorn_parse_handler():
         uv_err.setLevel(logging.DEBUG)
         uv_err.addHandler(UvicornParseErrorHandler())
     except Exception:
+        # logging attached failed, but we don't want to crash the app for that
         pass
 
 # Attach the handler early so uvicorn warnings are forwarded to our logger

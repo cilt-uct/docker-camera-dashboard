@@ -161,6 +161,10 @@ span.filter-name {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
+
+                .card-status {
+                    min-width: 70px;
+                }
             }
             .card-footer {
                 font-size: 80%;

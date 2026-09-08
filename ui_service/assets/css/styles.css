@@ -191,6 +191,9 @@ span.filter-name {
   align-items: center;
   justify-content: space-between;
 }
+.container #agentGrid .card .card-body .card-status {
+  min-width: 70px;
+}
 .container #agentGrid .card .card-footer {
   font-size: 80%;
   display: flex;

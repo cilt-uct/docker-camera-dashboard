@@ -299,14 +299,16 @@ class CameraDashboard {
         Array.from(this.state.cameraMap.entries())
             .sort((a, b) => a[0].localeCompare(b[0]))
             .forEach((item) => {
-                let name = this.normalizeName(item[0]);
-                if (!$(`#camera-${name}`).exists()) {
+                let name = this.normalizeName(item[0]),
+                    $el = $(`#camera-${name}`);
+                if (!$el.exists()) {
                     const card = this.createCameraCard(item[1]);
                     $grid.append(card);
                     item.root = $(card);
+                    $el = $(`#camera-${name}`);
                 }
-                $(`#camera-${name}`).data(item[1]);
-                this.fillCameraCard($(`#camera-${name}`))
+                $el.data(item[1]);
+                this.fillCameraCard($el)
             });
 
         this.applyCameraFilters();
@@ -317,7 +319,7 @@ class CameraDashboard {
 
         const clone = template.content.cloneNode(true);
         const $column = $(clone.querySelector(".col-xl-3"));
-        $column.attr('id', `agent-${data.name}`);
+        $column.attr('id', `agent-${data.name.toLowerCase()}`);
         $column.data(data);
 
         return clone;
@@ -370,14 +372,15 @@ class CameraDashboard {
         Array.from(this.state.agentMap.entries())
             .sort((a, b) => a[0].localeCompare(b[0]))
             .forEach((item) => {
-                if (!$(`#agent-${item[0]}`).exists()) {
+                let $el = $(`#agent-${item[0]}`);
+                if (!$el.exists()) {
                     const card = this.createAgentCard(item[1]);
                     $grid.append(card);
                     item.root = $(card);
+                    $el = $(`#agent-${item[0]}`);
                 }
-
-                $(`#agent-${item[0]}`).data(item[1]);
-                this.fillAgentCard($(`#agent-${item[0]}`))
+                $el.data(item[1]);
+                this.fillAgentCard($el)
             });
 
         this.applyAgentFilters();

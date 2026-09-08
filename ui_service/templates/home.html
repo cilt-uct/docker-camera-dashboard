@@ -230,9 +230,9 @@
     <script src="/cams/assets/js/moments.min.js"></script>
     <script type="module">
         import CameraDashboard from "/cams/assets/js/camera-dashboard.js";
-
+        window.dashboard = null;
         $(document).ready(() => {
-            const dashboard = new CameraDashboard({ refresh: true });
+            window.dashboard = new CameraDashboard({ refresh: true });
         });
     </script>
 </body>

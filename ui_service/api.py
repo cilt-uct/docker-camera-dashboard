@@ -7,7 +7,7 @@ from models import CameraCurrentResponse, CameraTimelapseResponse
 from services import (
     ensure_camera_exists, generate_etag,
     get_camera_current, get_camera_timelapse,
-    fetch_cameras, fetch_agents
+    fetch_cameras, fetch_agents, fetch_schedule
 )
 
 router = APIRouter()
@@ -79,6 +79,26 @@ async def get_capture_agent_details(request: Request, response: Response):
 
     except Exception as e:
         logger.exception("Failed to get capture agents")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Schedule --------------------------------------------------
+@router.get("/api/schedule")
+async def get_schedule(response: Response):
+    try:
+        schedule = await fetch_schedule()
+
+        etag = generate_etag(schedule)
+        response.headers["ETag"] = f'"{etag}"'
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+
+        return {
+            "status": "success",
+            **schedule,
+            "version": etag
+        }
+
+    except Exception as e:
+        logger.exception("Failed to get schedule")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Activity --------------------------------------------------

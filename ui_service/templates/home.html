@@ -8,7 +8,7 @@
 
     <!-- Fontawesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link rel="stylesheet" href="/cams/assets/css/styles.min.css?v=1.0">
+    <link rel="stylesheet" href="/cams/assets/css/styles.min.css?v=1.1">
 
 </head>
 <body class="bg-light">
@@ -17,6 +17,7 @@
             <div class="nav nav-tabs" id="nav-tab" role="tablist">
                 <button class="nav-link active" id="nav-cameras-tab" data-bs-toggle="tab" data-bs-target="#nav-cameras" type="button" role="tab" aria-controls="nav-cameras" aria-selected="true">Cameras</button>
                 <button class="nav-link" id="nav-agents-tab" data-bs-toggle="tab" data-bs-target="#nav-agents" type="button" role="tab" aria-controls="nav-agents" aria-selected="false">Capture Agents</button>
+                <button class="nav-link" id="nav-schedule-tab" data-bs-toggle="tab" data-bs-target="#nav-schedule" type="button" role="tab" aria-controls="nav-schedule" aria-selected="false">Schedule</button>
             </div>
         </nav>
         <div class="tab-content" id="nav-tabContent">
@@ -165,6 +166,46 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div class="tab-pane" id="nav-schedule" role="tabpanel" aria-labelledby="nav-schedule-tab">
+
+                <!-- Filters -->
+                <div class="card">
+                    <div id="scheduleFilters" class="card-body row">
+                        <div class="col-md-3">
+                            <div class="input-group">
+                                <input type="text" id="scheduleSearch" class="form-control search-input"
+                                    data-type="schedule"
+                                    placeholder="Search by location or event ...">
+                                <button type="button" id="scheduleSearch_clear" class="btn btn-light">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-center schedule-legend">
+                            <span class="schedule-event status-scheduled">Scheduled</span>
+                            <span class="schedule-event status-recording">Recording</span>
+                            <span class="schedule-event status-processing">Processing</span>
+                            <span class="schedule-event status-finished">Finished</span>
+                            <span class="schedule-event status-failed">Failed</span>
+                        </div>
+                        <div class="col-md-3 text-end">
+                            <small class="text-muted">
+                                <span id="schedule-count">0</span> events &middot;
+                                updated <span id="schedule-last-refresh">never</span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div id="scheduleGrid" class="schedule-wrapper">
+                    <table class="table table-sm table-bordered schedule-table">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
                 </div>
             </div>
         </div> <!-- all tabs -->

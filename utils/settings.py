@@ -86,7 +86,7 @@ class FetchSettings(BaseSettings):
         if 'script' in self.SERVER_TYPE:
             return
 
-        # explicity set self.Redis_password, was returning the file path name
+        # explicitly set self.Redis_password, was returning the file path name
         password_file = "/run/secrets/redis_password"
 
         if os.path.exists(password_file):

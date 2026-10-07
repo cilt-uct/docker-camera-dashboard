@@ -105,6 +105,8 @@ class RestClient:
         if self._use_requests_digest:
             # Use requests.Session for Digest auth
             kwargs = {'headers': headers}
+            if params is not None:
+                kwargs['params'] = params
             if files is not None:
                 kwargs['files'] = files
             elif payload_data is not None:
@@ -142,6 +144,8 @@ class RestClient:
             for attempt in range(1, self.retries + 1):
                 try:
                     kwargs = {}
+                    if params is not None:
+                        kwargs['params'] = params
                     if headers:
                         kwargs['headers'] = headers
                     if files is not None:

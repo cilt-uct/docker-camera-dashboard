@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import socket
 import time
@@ -6,7 +7,7 @@ import redis.asyncio as redis
 
 from urllib.parse import urlparse
 from dateutil.parser import parse as parse_dt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from subprocess import call
 
@@ -402,6 +403,116 @@ async def update_capture_agent_state(settings):
 
     logger.info(f"Updated states for {len(response['results'])} CA's")
 
+SCHEDULE_PAGE_SIZE = 100
+
+def map_external_event(ev: dict) -> dict:
+    """Map an External API event to the schedule event shape used by the UI."""
+    scheduling = ev.get('scheduling') or {}
+    start = ev.get('start')
+
+    end = None
+    start_dt = str_to_dt_or_none(start)
+    if start_dt is not None and ev.get('duration') not in (None, ''):
+        try:
+            end_dt = start_dt + timedelta(milliseconds=int(ev['duration']))
+            end = end_dt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        except (TypeError, ValueError):
+            end = None
+
+    return {
+        'id': ev.get('identifier'),
+        'title': ev.get('title'),
+        'start_date': start,
+        'end_date': end or scheduling.get('end'),
+        'technical_start': scheduling.get('start') or start,
+        'technical_end': scheduling.get('end') or end,
+        'event_status': ev.get('status'),
+        'displayable_status': ev.get('status'),
+        'location': ev.get('location'),
+        'agent_id': scheduling.get('agent_id') or ev.get('location'),
+    }
+
+async def update_schedule(settings):
+    """
+    Fetch today's events from Opencast, enrich them with camera and capture agent
+    details from Redis, and store the grouped schedule in Redis as 'schedule:today'.
+    """
+    rc = get_redis(settings)
+    try:
+        now = datetime.now().astimezone()
+        start_local = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_local = start_local + timedelta(days=1) - timedelta(seconds=1)
+        utc_fmt = '%Y-%m-%dT%H:%M:%SZ'
+
+        oc = settings.OC
+        events = []
+        offset = 0
+        while True:
+            results = oc.get_events(start_date=start_local.astimezone(timezone.utc).strftime(utc_fmt),
+                                    end_date=end_local.astimezone(timezone.utc).strftime(utc_fmt),
+                                    sort='location:ASC',
+                                    withPublications=False,
+                                    withScheduling=True,
+                                    offset=offset, limit=SCHEDULE_PAGE_SIZE)
+            if results is None:
+                logger.error("Failed to fetch schedule from Opencast")
+                return
+
+            events.extend(map_external_event(ev) for ev in results)
+            offset += len(results)
+
+            if len(results) < SCHEDULE_PAGE_SIZE:
+                break
+
+        display_names = await rc.hgetall("ca:display")
+        locations = {}
+        for ev in events:
+            name = ev.get('agent_id') or ev.get('location') or 'unknown'
+
+            if name not in locations:
+                ca_hash = await rc.hgetall(f"ca:{name}")
+                cam_hash = await rc.hgetall(f"camera:{name}")
+                locations[name] = {
+                    "name": name,
+                    "display": ca_hash.get("display") or display_names.get(name) or name,
+                    "agent_state": ca_hash.get("state") or "unknown",
+                    "agent_last_updated": ca_hash.get("last_updated") or None,
+                    "has_camera": bool(cam_hash),
+                    "camera_enabled": cam_hash.get("enabled") == "True",
+                    "camera_last_capture_completed": cam_hash.get("last_capture_completed") or None,
+                    "events": []
+                }
+
+            locations[name]["events"].append(ev)
+
+        for loc in locations.values():
+            loc["events"].sort(key=lambda e: e.get("start_date") or "")
+
+        payload = {
+            "date": start_local.date().isoformat(),
+            "window_start": start_local.isoformat(timespec='seconds'),
+            "window_end": end_local.isoformat(timespec='seconds'),
+            "last_refresh": datetime.now().astimezone().isoformat(timespec='seconds'),
+            "total": len(events),
+            "locations": sorted(locations.values(), key=lambda loc: loc["name"].lower())
+        }
+
+        await rc.set("schedule:today", json.dumps(payload))
+        logger.info(f"Updated schedule: {len(events)} events in {len(locations)} locations")
+
+    except Exception as e:
+        logger.exception(f"Failed to update schedule: {e}")
+    finally:
+        try:
+            await rc.aclose()
+        except Exception:
+            # closing the client should never crash the job
+            pass
+
+async def update_capture_agent_state_and_schedule(settings):
+    await update_capture_agent_state(settings)
+    await update_schedule(settings)
+
 
 # Cleanup
 # -----------------------------------------------
@@ -536,7 +647,7 @@ def update_capture_agent_details_sync():
     asyncio.run(update_capture_agent_details(settings))
 
 def update_capture_agent_state_sync():
-    asyncio.run(update_capture_agent_state(settings))
+    asyncio.run(update_capture_agent_state_and_schedule(settings))
 
 async def startup():
     if settings.REDIS_CLEAN_START:
@@ -545,6 +656,7 @@ async def startup():
     await load_cameras_to_redis(settings)
     await update_capture_agent_details(settings)
     await update_capture_agent_state(settings)
+    await update_schedule(settings)
     logger.info("Startup load complete: cameras + capture agents synced to Redis.")
 
 if __name__ == "__main__":

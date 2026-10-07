@@ -239,6 +239,81 @@ span.filter-name {
 .status-recording { color: #dc2626; }
 .status-offline { color: #6b7280; }
 .modal-content { width: 74vw; }
+
+/* Schedule (gantt) tab */
+@mixin schedule-event($name, $bg, $text: var(--color-white)) {
+    .schedule-event.status-#{$name} {
+        background: $bg;
+        color: $text;
+    }
+}
+
+#scheduleGrid {
+    margin-top: 1.5rem;
+    background: var(--color-white);
+
+    .schedule-table {
+        table-layout: fixed;
+        width: 100%;
+        margin-bottom: 0;
+
+        th, td { vertical-align: middle; }
+
+        .schedule-location {
+            width: 200px;
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            background: var(--color-white);
+            font-size: 0.875em;
+        }
+        .schedule-location-status {
+            display: flex;
+            gap: 10px;
+            font-size: 0.85em;
+        }
+        th.schedule-hour {
+            text-align: center;
+            font-size: 0.8em;
+        }
+        td.schedule-hour {
+            position: relative;
+            height: 52px;
+            padding: 0;
+            overflow: visible;
+        }
+        .current-hour { background: rgba(0, 123, 255, 0.08); }
+    }
+    .schedule-event {
+        position: absolute;
+        top: 8px;
+        bottom: 8px;
+        z-index: 1;
+    }
+}
+
+.schedule-event {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    line-height: 1.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: default;
+}
+.schedule-legend .schedule-event {
+    display: inline-block;
+    margin: 0 2px;
+}
+
+@include schedule-event(scheduled, var(--color-grey));
+@include schedule-event(recording, var(--color-blue));
+@include schedule-event(processing, var(--color-orange), var(--color-black));
+@include schedule-event(finished, var(--color-green));
+@include schedule-event(failed, var(--color-red));
+@include schedule-event(unknown, #adb5bd, var(--color-black));
+.status-no-camera { color: var(--color-grey); }
 button.no-bg-btn {
     padding: 0;
     background: none;

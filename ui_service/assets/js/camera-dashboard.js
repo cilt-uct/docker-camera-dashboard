@@ -14,6 +14,7 @@ class CameraDashboard {
 
             camData: null,
             agentData: null,
+            scheduleData: null,
             isRefreshing: false
         };
 
@@ -22,7 +23,8 @@ class CameraDashboard {
         // Options for endpoints or selectors
         this.endpoints = {
             cameras: options.camerasEndpoint || "/cams/api/cameras",
-            agents: options.agentsEndpoint || "/cams/api/agents"
+            agents: options.agentsEndpoint || "/cams/api/agents",
+            schedule: options.scheduleEndpoint || "/cams/api/schedule"
         };
 
         this.selectors = {
@@ -33,6 +35,9 @@ class CameraDashboard {
             agentGrid: options.agentGrid || "#agentGrid",
             agentSearch: options.agentSearch || "#agentSearch",
             agentFilters: options.agentFilters || "#agentFilters",
+
+            scheduleGrid: options.scheduleGrid || "#scheduleGrid",
+            scheduleSearch: options.scheduleSearch || "#scheduleSearch",
 
             cameraModal: options.cameraModal || "#cameraModal"
         };
@@ -54,6 +59,17 @@ class CameraDashboard {
         if (s.includes("IDLE")) return "idle";
         if (s.includes("CAPTURING")) return "capturing";
         if (s.includes("ERROR")) return "error";
+        return "unknown";
+    }
+
+    normalizeEventStatus(raw) {
+        if (!raw) return "unknown";
+        const s = raw.split(".").pop().toUpperCase();
+        if (s.includes("FAIL") || s.includes("CANCEL")) return "failed";
+        if (s === "PROCESSED") return "finished";
+        if (s.includes("RECORDING")) return "recording";
+        if (s.includes("PROCESSING") || s.includes("INGESTING") || s.includes("PENDING")) return "processing";
+        if (s.includes("SCHEDULED")) return "scheduled";
         return "unknown";
     }
 
@@ -121,6 +137,16 @@ class CameraDashboard {
             $(this.selectors.agentSearch).val('');
             this.applyAgentFilters();
         });
+
+        let scheduleSearchTimer;
+        $(this.selectors.scheduleSearch).on("input", () => {
+            clearTimeout(scheduleSearchTimer);
+            scheduleSearchTimer = setTimeout(() => this.applyScheduleFilters(), 250);
+        });
+        $('#scheduleSearch_clear').on('click', () => {
+            $(this.selectors.scheduleSearch).val('');
+            this.applyScheduleFilters();
+        });
     }
 
     bindSortButtons() {
@@ -157,6 +183,21 @@ class CameraDashboard {
     // DATA REFRESH
     // ==========================
     async refreshData() {
+        await Promise.all([this.refreshCamerasAndAgents(), this.refreshSchedule()]);
+    }
+
+    async refreshSchedule() {
+        try {
+            const res = await fetch(this.endpoints.schedule);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            this.state.scheduleData = await res.json();
+            this.renderSchedule();
+        } catch (err) {
+            console.error("refreshSchedule failed:", err);
+        }
+    }
+
+    async refreshCamerasAndAgents() {
         try {
             const [camRes, agentRes] = await Promise.all([
                 fetch(this.endpoints.cameras),
@@ -386,6 +427,112 @@ class CameraDashboard {
         this.applyAgentFilters();
     }
 
+    renderSchedule() {
+        const data = this.state.scheduleData || {};
+        const locations = data.locations || [];
+        const $table = $(this.selectors.scheduleGrid).find("table");
+        const $thead = $table.find("thead").empty();
+        const $tbody = $table.find("tbody").empty();
+
+        $("#schedule-count").text(data.total || 0);
+        $("#schedule-last-refresh")
+            .text(data.last_refresh ? moment(data.last_refresh).fromNow() : "never")
+            .attr("title", data.last_refresh ? moment(data.last_refresh).format("ddd, D MMM YYYY, HH:mm:ss") : "");
+
+        const dayStart = data.date ? moment(data.date, "YYYY-MM-DD") : moment().startOf("day");
+        const toHours = (value) => moment(value).diff(dayStart, "hours", true);
+
+        // Work out the visible hour range from the events (fallback to office hours)
+        let first = 24, last = 0;
+        locations.forEach(loc => (loc.events || []).forEach(ev => {
+            first = Math.min(first, Math.floor(toHours(ev.start_date)));
+            last = Math.max(last, Math.ceil(toHours(ev.end_date)));
+        }));
+        first = Math.max(0, first);
+        last = Math.min(24, last);
+        if (first >= last) { first = 7; last = 18; }
+
+        const hours = Array.from({ length: last - first }, (_, i) => first + i);
+        const nowHour = moment().isSame(dayStart, "day") ? moment().hour() : -1;
+
+        $table.css("min-width", `${200 + hours.length * 80}px`);
+
+        // Header
+        const $headRow = $("<tr>").append($("<th>").addClass("schedule-location").text("Location"));
+        hours.forEach(h => {
+            $headRow.append($("<th>")
+                .addClass("schedule-hour")
+                .toggleClass("current-hour", h === nowHour)
+                .text(`${String(h).padStart(2, "0")}:00`));
+        });
+        $thead.append($headRow);
+
+        if (!locations.length) {
+            $tbody.append($("<tr>").append($("<td>")
+                .attr("colspan", hours.length + 1)
+                .addClass("text-center text-muted py-4")
+                .text("No scheduled events for today")));
+            return;
+        }
+
+        locations.forEach(loc => {
+            const agentStatus = this.normalizeAgentStatus(loc.agent_state);
+            const cameraStatus = loc.camera_state || "none";
+            const searchText = [loc.name, loc.display, ...(loc.events || []).map(ev => ev.title)]
+                .join(" ").toLowerCase();
+
+            const $row = $("<tr>").attr("data-search", searchText);
+
+            const $label = $("<td>").addClass("schedule-location")
+                .append($("<div>").addClass("fw-semibold").text(loc.name));
+            if (loc.display && loc.display !== loc.name) {
+                $label.append($("<div>").addClass("small text-muted").text(loc.display));
+            }
+            $label.append($("<div>").addClass("schedule-location-status")
+                .append(this.getStatusDiv(agentStatus, "fa-server", "Capture Agent Status"))
+                .append(cameraStatus === "none"
+                    ? this.getStatusDiv("no-camera", "fa-video-slash", "No camera configured")
+                    : this.getStatusDiv(cameraStatus, "fa-video", "Camera Status")));
+            $row.append($label);
+
+            const $cells = hours.map(h => $("<td>")
+                .addClass("schedule-hour")
+                .toggleClass("current-hour", h === nowHour));
+
+            (loc.events || []).forEach(ev => {
+                const start = Math.max(first, toHours(ev.start_date));
+                const end = Math.min(last, toHours(ev.end_date));
+                if (end <= start) return;
+
+                const startCol = Math.floor(start);
+                const bordersCrossed = Math.max(0, Math.ceil(end) - startCol - 1);
+                const status = this.normalizeEventStatus(ev.displayable_status || ev.event_status);
+                const fmt = (v) => v ? moment(v).format("HH:mm") : "?";
+
+                const tooltip = [
+                    ev.title,
+                    `${fmt(ev.start_date)} - ${fmt(ev.end_date)}`,
+                    `Technical: ${fmt(ev.technical_start)} - ${fmt(ev.technical_end)}`,
+                    `Status: ${status}`
+                ].join("\n");
+
+                $cells[startCol - first].append($("<div>")
+                    .addClass(`schedule-event status-${status}`)
+                    .css({
+                        left: `${(start - startCol) * 100}%`,
+                        width: `calc(${(end - start) * 100}% + ${bordersCrossed}px - 2px)`
+                    })
+                    .attr("title", tooltip)
+                    .text(ev.title));
+            });
+
+            $row.append($cells);
+            $tbody.append($row);
+        });
+
+        this.applyScheduleFilters();
+    }
+
     // ==========================
     // FILTERS
     // ==========================
@@ -457,6 +604,14 @@ class CameraDashboard {
         });
 
         // console.log(`Agents Visible: ${visibleCount}`);
+    }
+
+    applyScheduleFilters() {
+        const query = ($(this.selectors.scheduleSearch).val() || "").toLowerCase().trim();
+        $(this.selectors.scheduleGrid).find("tbody tr[data-search]").each(function () {
+            const $row = $(this);
+            $row.toggle(!query || ($row.attr("data-search") || "").includes(query));
+        });
     }
 
     sortGrid($grid, order = "asc") {

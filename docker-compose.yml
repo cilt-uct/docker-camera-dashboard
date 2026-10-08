@@ -21,7 +21,6 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=/run/secrets/redis_password # This line references a path for secret loading, but does not embed a secret.
     secrets:
-      # - cameras
       - passwords
       - redis_password
 
@@ -42,7 +41,6 @@ services:
       - REDIS_HOST=redis
       - REDIS_PASSWORD=/run/secrets/redis_password # This line references a path for secret loading, but does not embed a secret.
     secrets:
-      # - cameras
       - passwords
       - redis_password
 

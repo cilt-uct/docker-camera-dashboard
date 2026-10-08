@@ -522,7 +522,7 @@ async def update_pycas(settings):
         return
 
     rc = get_redis(settings)
-    await rc.set("ca:last_refresh", datetime.now().astimezone().isoformat(timespec='seconds'))
+    await rc.set("pyca:last_refresh", datetime.now().astimezone().isoformat(timespec='seconds'))
 
     try:
         html_client = settings.HTML(username=None, password=None)

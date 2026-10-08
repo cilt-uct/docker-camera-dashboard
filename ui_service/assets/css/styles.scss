@@ -54,7 +54,29 @@ span.filter-name {
 .container {
     > nav {
         margin-top: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        .nav.nav-tabs {
+            position: relative;
+            bottom: -1px;
+        }
+
+        #last-updated {
+            color: #848484;
+            font-size: 0.8rem;
+
+            &.status-error {
+                color: var(--color-red);
+            }
+        }
     }
+
+    .tab-content {
+        border-top: 1px solid #dee2e6;
+    }
+
     .tab-pane > .card {
         border-top-left-radius: 0;
         border-top-right-radius: 0;
@@ -239,6 +261,182 @@ span.filter-name {
 .status-recording { color: #dc2626; }
 .status-offline { color: #6b7280; }
 .modal-content { width: 74vw; }
+
+/* Schedule (gantt) tab */
+@mixin schedule-event($name, $bg, $text: var(--color-white)) {
+    .schedule-event.status-#{$name} {
+        background: $bg;
+        color: $text;
+    }
+}
+@mixin schedule-status($name, $bg, $text: var(--color-white)) {
+    .schedule-location-status > .status-line-#{$name} {
+        background: $bg;
+        color: $text;
+    }
+}
+
+
+
+#scheduleGrid {
+    margin-top: 1.5rem;
+    background: var(--color-white);
+
+    .schedule-table {
+        table-layout: fixed;
+        width: 100%;
+        margin-bottom: 0;
+
+        th, td { vertical-align: middle; }
+
+        .schedule-location {
+            width: 200px;
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            background: var(--color-white);
+            font-size: 0.875em;
+        }
+        .schedule-location-status {
+            display: flex;
+            gap: 10px;
+            font-size: 0.85em;
+            justify-content: space-around;
+        }
+        th.schedule-hour {
+            text-align: center;
+            font-size: 0.8em;
+        }
+        td.schedule-hour {
+            position: relative;
+            height: 52px;
+            padding: 0;
+            overflow: visible;
+        }
+        .current-hour { background: rgba(0, 123, 255, 0.08) !important; }
+
+        // .row-fine td { background-color: var(--color-green-light); }
+        .row-danger td { background-color: #FBDBDB; }
+    }
+    .schedule-event {
+        position: absolute;
+        top: 8px;
+        bottom: 8px;
+        z-index: 1;
+    }
+}
+
+.schedule-event {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    line-height: 1.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.82;
+}
+
+a.schedule-event {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+
+    &:hover,
+    &:focus {
+        opacity: 1.0;
+    }
+}
+
+.schedule-info {
+    position: absolute;
+    right: 0;
+    top: 4px;
+
+    .schedule-info-content {
+        font-size: .875em;
+    }
+
+    .schedule-legend {
+        margin-top: 10px;
+
+        .schedule-event {
+            font-size: 0.7rem;
+            display: inline-block;
+            margin: 0 2px;
+        }
+    }
+}
+
+@include schedule-event(scheduled, var(--color-grey));
+@include schedule-event(recording, var(--color-blue));
+@include schedule-event(processing, #a3d500, var(--color-black));
+@include schedule-event(finished, var(--color-green));
+@include schedule-event(failed, var(--color-red));
+@include schedule-event(unknown, #adb5bd, var(--color-black));
+
+@include schedule-status(online, var(--color-green));
+@include schedule-status(offline, var(--color-red));
+
+@include schedule-status(idle, var(--color-green));
+@include schedule-status(capturing, var(--color-blue));
+@include schedule-status(error, var(--color-red));
+
+@include schedule-status(unknown, #ffc107, #131212);
+@include schedule-status(none, #e8e9eb, #4f4e4e);
+
+.schedule-location-status {
+    .status-line-none {
+        visibility: hidden;
+    }
+
+    .status-line {
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: .9em;
+        text-align: center;
+        line-height: 1.6;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        cursor: default;
+        width: max(36px, 28%);
+        opacity: 0.82;
+
+        .fw-semibold {
+            padding-left: 3px;
+            margin-bottom: 4px;
+        }
+    }
+
+    a.status-line {
+        text-decoration: none;
+        color: inherit;
+        cursor: pointer;
+
+        &:hover,
+        &:focus {
+            opacity: 1.0;
+        }
+    }
+
+    .status-line i {
+        display: none;
+    }
+
+    .status-line[data-status="camera"] .fa-video {
+        display: inline-block;
+    }
+
+    .status-line[data-status="agent"] .fa-server {
+        display: inline-block;
+    }
+
+    .status-line[data-status="pyca"] .fa-camera {
+        display: inline-block;
+    }
+    }
+
 button.no-bg-btn {
     padding: 0;
     background: none;

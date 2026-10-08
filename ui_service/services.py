@@ -134,6 +134,45 @@ async def fetch_agents():
 
     return agents
 
+async def fetch_schedule() -> dict:
+    """Get today's schedule from Redis, adding the current camera state per location."""
+    raw = await redis_client.get("schedule:today")
+    if not raw:
+        return {"date": None, "window_start": None, "window_end": None,
+                "last_refresh": None, "total": 0, "locations": []}
+
+    schedule = json.loads(raw)
+    for loc in schedule.get("locations", []):
+        if not loc.get("has_camera"):
+            loc["camera_state"] = "none"
+            continue
+
+        # Use the live camera hash so the state is fresher than the stored schedule
+        last_completed = await redis_client.hget(f"camera:{loc['name']}", "last_capture_completed")
+        loc["camera_last_capture_completed"] = last_completed or loc.get("camera_last_capture_completed")
+        loc["camera_state"] = get_camera_status(loc["camera_last_capture_completed"])
+
+    return schedule
+
+async def fetch_pyca() -> dict:
+    """Get the PyCA's from Redis."""
+    raw = await redis_client.smembers("pyca:index")
+    if not raw:
+        return {}
+
+    pyca_index = list(raw)
+    result = []
+    for name in pyca_index:
+        pyca_hash = await redis_client.hgetall(f"pyca:{name}")
+        result.append({
+            "name": name,
+            "url": pyca_hash.get("url") if bool(pyca_hash) else None,
+            "state": pyca_hash.get("state") or "none",
+            "last_updated": pyca_hash.get("last_updated") or None
+        })
+
+    return {'index': pyca_index, 'list': result}
+
 async def get_camera_current(camera_name: str, request: Request):
     image_url, thumb_url = await asyncio.gather(
         get_image_url(camera_name, request),

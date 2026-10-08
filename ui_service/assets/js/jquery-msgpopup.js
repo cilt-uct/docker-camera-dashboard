@@ -168,7 +168,7 @@
 				.removeClass(opt.itemClass)
 				.removeClass(opt.defaultTypeClass)
 				.find('['+opt.boxContentData+']')
-				.removeClass(opt.boxContentClass)
+				.removeClass(opt.boxContentClass);
 			} else {
 				msgClone
 				.find('['+opt.itemData+']')

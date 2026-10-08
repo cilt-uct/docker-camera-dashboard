@@ -76,6 +76,23 @@ span.filter-name {
 
 .container > nav {
   margin-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.container > nav .nav.nav-tabs {
+  position: relative;
+  bottom: -1px;
+}
+.container > nav #last-updated {
+  color: #848484;
+  font-size: 0.8rem;
+}
+.container > nav #last-updated.status-error {
+  color: var(--color-red);
+}
+.container .tab-content {
+  border-top: 1px solid #dee2e6;
 }
 .container .tab-pane > .card {
   border-top-left-radius: 0;
@@ -300,6 +317,199 @@ span.filter-name {
 
 .modal-content {
   width: 74vw;
+}
+
+/* Schedule (gantt) tab */
+#scheduleGrid {
+  margin-top: 1.5rem;
+  background: var(--color-white);
+}
+#scheduleGrid .schedule-table {
+  table-layout: fixed;
+  width: 100%;
+  margin-bottom: 0;
+}
+#scheduleGrid .schedule-table th, #scheduleGrid .schedule-table td {
+  vertical-align: middle;
+}
+#scheduleGrid .schedule-table .schedule-location {
+  width: 200px;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--color-white);
+  font-size: 0.875em;
+}
+#scheduleGrid .schedule-table .schedule-location-status {
+  display: flex;
+  gap: 10px;
+  font-size: 0.85em;
+  justify-content: space-around;
+}
+#scheduleGrid .schedule-table th.schedule-hour {
+  text-align: center;
+  font-size: 0.8em;
+}
+#scheduleGrid .schedule-table td.schedule-hour {
+  position: relative;
+  height: 52px;
+  padding: 0;
+  overflow: visible;
+}
+#scheduleGrid .schedule-table .current-hour {
+  background: rgba(0, 123, 255, 0.08) !important;
+}
+#scheduleGrid .schedule-table .row-danger td {
+  background-color: #FBDBDB;
+}
+#scheduleGrid .schedule-event {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  z-index: 1;
+}
+
+.schedule-event {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.82;
+}
+
+a.schedule-event {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+a.schedule-event:hover, a.schedule-event:focus {
+  opacity: 1;
+}
+
+.schedule-info {
+  position: absolute;
+  right: 0;
+  top: 4px;
+}
+.schedule-info .schedule-info-content {
+  font-size: 0.875em;
+}
+.schedule-info .schedule-legend {
+  margin-top: 10px;
+}
+.schedule-info .schedule-legend .schedule-event {
+  font-size: 0.7rem;
+  display: inline-block;
+  margin: 0 2px;
+}
+
+.schedule-event.status-scheduled {
+  background: var(--color-grey);
+  color: var(--color-white);
+}
+
+.schedule-event.status-recording {
+  background: var(--color-blue);
+  color: var(--color-white);
+}
+
+.schedule-event.status-processing {
+  background: #a3d500;
+  color: var(--color-black);
+}
+
+.schedule-event.status-finished {
+  background: var(--color-green);
+  color: var(--color-white);
+}
+
+.schedule-event.status-failed {
+  background: var(--color-red);
+  color: var(--color-white);
+}
+
+.schedule-event.status-unknown {
+  background: #adb5bd;
+  color: var(--color-black);
+}
+
+.schedule-location-status > .status-line-online {
+  background: var(--color-green);
+  color: var(--color-white);
+}
+
+.schedule-location-status > .status-line-offline {
+  background: var(--color-red);
+  color: var(--color-white);
+}
+
+.schedule-location-status > .status-line-idle {
+  background: var(--color-green);
+  color: var(--color-white);
+}
+
+.schedule-location-status > .status-line-capturing {
+  background: var(--color-blue);
+  color: var(--color-white);
+}
+
+.schedule-location-status > .status-line-error {
+  background: var(--color-red);
+  color: var(--color-white);
+}
+
+.schedule-location-status > .status-line-unknown {
+  background: #ffc107;
+  color: #131212;
+}
+
+.schedule-location-status > .status-line-none {
+  background: #e8e9eb;
+  color: #4f4e4e;
+}
+
+.schedule-location-status .status-line-none {
+  visibility: hidden;
+}
+.schedule-location-status .status-line {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  text-align: center;
+  line-height: 1.6;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  width: max(36px, 28%);
+  opacity: 0.82;
+}
+.schedule-location-status .status-line .fw-semibold {
+  padding-left: 3px;
+  margin-bottom: 4px;
+}
+.schedule-location-status a.status-line {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+.schedule-location-status a.status-line:hover, .schedule-location-status a.status-line:focus {
+  opacity: 1;
+}
+.schedule-location-status .status-line i {
+  display: none;
+}
+.schedule-location-status .status-line[data-status=camera] .fa-video {
+  display: inline-block;
+}
+.schedule-location-status .status-line[data-status=agent] .fa-server {
+  display: inline-block;
+}
+.schedule-location-status .status-line[data-status=pyca] .fa-camera {
+  display: inline-block;
 }
 
 button.no-bg-btn {

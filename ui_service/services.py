@@ -154,6 +154,25 @@ async def fetch_schedule() -> dict:
 
     return schedule
 
+async def fetch_pyca() -> dict:
+    """Get the PyCA's from Redis."""
+    raw = await redis_client.smembers("pyca:index")
+    if not raw:
+        return {}
+
+    pyca_index = list(raw)
+    result = []
+    for name in pyca_index:
+        pyca_hash = await redis_client.hgetall(f"pyca:{name}")
+        result.append({
+            "name": name,
+            "url": pyca_hash.get("url") if bool(pyca_hash) else None,
+            "state": pyca_hash.get("state") or "none",
+            "last_updated": pyca_hash.get("last_updated") or None
+        })
+
+    return {'index': pyca_index, 'list': result}
+
 async def get_camera_current(camera_name: str, request: Request):
     image_url, thumb_url = await asyncio.gather(
         get_image_url(camera_name, request),

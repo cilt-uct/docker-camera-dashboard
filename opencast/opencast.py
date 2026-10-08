@@ -151,7 +151,7 @@ class Opencast(object):
         }
 
         client = self.create_digest_client()
-        resp = client.get(self._full_url(f'{self.server}/api/events'), params=params)
+        resp = client.get(self._full_url('/api/events'), params=params)
         if resp and getattr(resp, 'status_code', None) == 200:
             try:
                 return resp.json()

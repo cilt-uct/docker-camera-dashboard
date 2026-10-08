@@ -403,8 +403,6 @@ async def update_capture_agent_state(settings):
 
     logger.info(f"Updated states for {len(response['results'])} CA's")
 
-SCHEDULE_PAGE_SIZE = 100
-
 def map_external_event(ev: dict) -> dict:
     """Map an External API event to the schedule event shape used by the UI."""
     scheduling = ev.get('scheduling') or {}
@@ -453,7 +451,7 @@ async def update_schedule(settings):
                                     sort='location:ASC',
                                     withPublications=False,
                                     withScheduling=True,
-                                    offset=offset, limit=SCHEDULE_PAGE_SIZE)
+                                    offset=offset, limit=settings.SCHEDULE_PAGE_SIZE)
             if results is None:
                 logger.error("Failed to fetch schedule from Opencast")
                 return
@@ -461,7 +459,7 @@ async def update_schedule(settings):
             events.extend(map_external_event(ev) for ev in results)
             offset += len(results)
 
-            if len(results) < SCHEDULE_PAGE_SIZE:
+            if len(results) < settings.SCHEDULE_PAGE_SIZE:
                 break
 
         display_names = await rc.hgetall("ca:display")
@@ -472,6 +470,7 @@ async def update_schedule(settings):
             if name not in locations:
                 ca_hash = await rc.hgetall(f"ca:{name}")
                 cam_hash = await rc.hgetall(f"camera:{name}")
+                pyca_hash = await rc.hgetall(f"pyca:{name}")
                 locations[name] = {
                     "name": name,
                     "display": ca_hash.get("display") or display_names.get(name) or name,
@@ -480,6 +479,9 @@ async def update_schedule(settings):
                     "has_camera": bool(cam_hash),
                     "camera_enabled": cam_hash.get("enabled") == "True",
                     "camera_last_capture_completed": cam_hash.get("last_capture_completed") or None,
+                    "pyca_url": pyca_hash.get('url') if bool(pyca_hash) else None,
+                    "pyca_state": pyca_hash.get("state") or "none",
+                    "pyca_last_updated": pyca_hash.get("last_updated") or None,
                     "events": []
                 }
 
@@ -513,7 +515,44 @@ async def update_capture_agent_state_and_schedule(settings):
     await update_capture_agent_state(settings)
     await update_schedule(settings)
 
+# PyCA's
+# -----------------------------------------------
+async def update_pycas(settings):
+    if not settings.PYCA_PAGE_URL:
+        return
 
+    rc = get_redis(settings)
+    await rc.set("ca:last_refresh", datetime.now().astimezone().isoformat(timespec='seconds'))
+
+    try:
+        html_client = settings.HTML(username=None, password=None)
+        servers = html_client.get_pyca_servers(settings.PYCA_PAGE_URL)
+
+        async with rc.pipeline() as pipe:
+            for pyca in servers:
+                if 'id' not in pyca or 'test' not in pyca:
+                    continue
+                id = pyca.get('id').replace('pyca-', '') if pyca.get('id').startswith('pyca') else None
+                if id is None:
+                    continue
+
+                # ca:index -> set of capture agent names
+                await rc.sadd("pyca:index", id)
+
+                is_online, _ping_info = html_client.ping(f'{settings.PYCA_PAGE_URL}/{pyca["test"]}')
+                state = "online" if is_online else "offline"
+                pipe.hset(f"pyca:{id}", mapping={
+                    "url": pyca.get('url'),
+                    "state": state,
+                    "last_updated": format_datetime_for_redis(datetime.now().astimezone())
+                })
+            await pipe.execute()
+
+        logger.info(f"Updated Pycas servers: {len(servers)} found")
+    except Exception as e:
+        logger.exception(f"Failed to update Pycas servers: {e}")
+
+# -----------------------------------------------
 # Cleanup
 # -----------------------------------------------
 
@@ -649,6 +688,9 @@ def update_capture_agent_details_sync():
 def update_capture_agent_state_sync():
     asyncio.run(update_capture_agent_state_and_schedule(settings))
 
+def update_pycas_sync():
+    asyncio.run(update_pycas(settings))
+
 async def startup():
     if settings.REDIS_CLEAN_START:
         await clear_redis_on_startup(settings) # start fresh
@@ -657,6 +699,8 @@ async def startup():
     await update_capture_agent_details(settings)
     await update_capture_agent_state(settings)
     await update_schedule(settings)
+    await update_pycas(settings)
+
     logger.info("Startup load complete: cameras + capture agents synced to Redis.")
 
 if __name__ == "__main__":
@@ -671,6 +715,9 @@ if __name__ == "__main__":
     # Opencast - Get Capture Agent Status
     scheduler.add_job(update_capture_agent_details_sync, 'interval', hours=1, next_run_time=datetime.now() + timedelta(seconds=30))
     scheduler.add_job(update_capture_agent_state_sync, 'interval', minutes=5, next_run_time=datetime.now() + timedelta(seconds=40))
+
+    # PyCA overview page
+    scheduler.add_job(update_pycas_sync, 'interval', hours=1, next_run_time=datetime.now() + timedelta(seconds=50))
 
     # Cleanup - remove old images and timelapses and write updates to DB
     scheduler.add_job(clean_images, 'interval', args=[settings], days=1, next_run_time=datetime.now() + timedelta(seconds=5))

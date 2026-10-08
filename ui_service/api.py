@@ -7,7 +7,7 @@ from models import CameraCurrentResponse, CameraTimelapseResponse
 from services import (
     ensure_camera_exists, generate_etag,
     get_camera_current, get_camera_timelapse,
-    fetch_cameras, fetch_agents, fetch_schedule
+    fetch_cameras, fetch_agents, fetch_schedule, fetch_pyca
 )
 
 router = APIRouter()
@@ -99,6 +99,26 @@ async def get_schedule(response: Response):
 
     except Exception as e:
         logger.exception("Failed to get schedule")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Schedule --------------------------------------------------
+@router.get("/api/pyca")
+async def get_pyca(response: Response):
+    try:
+        pyca = await fetch_pyca()
+
+        etag = generate_etag(pyca)
+        response.headers["ETag"] = f'"{etag}"'
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+
+        return {
+            "status": "success",
+            **pyca,
+            "version": etag
+        }
+
+    except Exception as e:
+        logger.exception("Failed to get PyCA's")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Activity --------------------------------------------------

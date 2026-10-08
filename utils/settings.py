@@ -9,10 +9,13 @@ from typing import Optional
 from urllib.parse import quote_plus
 
 from opencast.opencast import Opencast
+from utils.simple import SimpleHTML
 
 logging.basicConfig(stream=sys.stdout,
         level=logging.INFO,
         format='%(asctime)s %(process)d %(levelname)-8s %(filename)s(%(lineno)d) %(message)s')
+
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 logger = logging.getLogger()
 
@@ -58,6 +61,8 @@ class FetchSettings(BaseSettings):
     OC_USER: str = Field(default='opencast', validation_alias='OC_USER', description='Opencast username.')
     OC_PASS: str = Field(default='password', validation_alias='OC_PASS', description='Opencast password.')
 
+    PYCA_PAGE_URL: str = Field(default='', validation_alias='PYCA_PAGE_URL', description='The URL of the PyCA overview page.')
+
     # Helpdesk contact
     CONTACT_EMAIL: str = Field(default='helpdesk@example.com', validation_alias='CONTACT_EMAIL', description='Helpdesk contact email.')
 
@@ -68,6 +73,9 @@ class FetchSettings(BaseSettings):
     STATUS_INTERVAL: int = Field(default=1200, description='Interval in seconds to mark camera as offline (15 minutes in seconds).')
     TIMELAPSE_INTERVAL: int = Field(default=900, description='Interval in seconds to run the timelapse generation (15 minutes in seconds).')
     CLEAN_INTERVAL: int = Field(default=604800, description='Interval in seconds for older files to be removed (7 * 24 * 60 * 60 = 7 days in seconds).')
+
+    # Fetch event page size
+    SCHEDULE_PAGE_SIZE: int = Field(default=200, description='Number of events to fetch per page from the schedule.')
 
     # Adjust these for your environment
     BATCH_SIZE: int = Field(default=10, description='Number of cameras to run concurrently')
@@ -109,6 +117,13 @@ class FetchSettings(BaseSettings):
             server=self.OC_HOST,
             username=self.OC_USER,
             password=self.OC_PASS,
+        )
+
+    def HTML(self, username:str | None = None, password:str | None = None) -> SimpleHTML:
+        """Create a SimpleHTML client instance."""
+        return SimpleHTML(
+            username=username,
+            password=password,
         )
 
     @property

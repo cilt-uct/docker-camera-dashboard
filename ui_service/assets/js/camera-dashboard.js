@@ -577,7 +577,7 @@ class CameraDashboard {
                 location_status_link_template.content.cloneNode(true).querySelector("a");
 
             $camera_status_block.classList.add(`status-line-${cameraStatus}`);
-            $camera_status_block.setAttribute('title', `Camera: ${cameraStatus}`)
+            $camera_status_block.setAttribute('title', `Camera: ${cameraStatus}`);
             $camera_status_block.dataset.status = 'camera';
 
             $agent_status_block.classList.add(`status-line-${agentStatus}`);

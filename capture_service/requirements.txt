@@ -7,7 +7,7 @@ pydantic==2.11.7
 pydantic-settings==2.10.1
 python-dateutil==2.9.0.post0
 redis==6.2.0
-urllib3==2.6.2
+urllib3==2.8.0
 sqlalchemy==2.0.23
 asyncmy==0.2.9
 cryptography>=46.0.0

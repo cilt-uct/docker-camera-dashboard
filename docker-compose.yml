@@ -14,6 +14,7 @@ services:
       - ./shared_volume:/shared_volume
       - ./opencast:/app/opencast
       - ./utils:/app/utils
+      - ./VERSION:/app/VERSION:ro
     restart: always
     depends_on:
       - redis
@@ -32,6 +33,9 @@ services:
       - ./shared_volume:/shared_volume
       - ./opencast:/app/opencast
       - ./utils:/app/utils
+      - ./VERSION:/app/VERSION:ro
+      - ./humans.txt:/app/humans.txt:ro
+      - ./robots.txt:/app/robots.txt:ro
     ports:
       - "8000:8000"
     restart: always

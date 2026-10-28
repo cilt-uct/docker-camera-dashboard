@@ -1,6 +1,6 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException,Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse, Response
 from contextlib import asynccontextmanager
 
 from datetime import datetime
@@ -63,6 +63,23 @@ async def get_status(request: Request):
         "activity": str(request.url_for('get_cameras_activity'))
     }
 
+# Extras ----------------------------------------------------
+def _file(name: str) -> Response:
+    path = settings.APP_DIR / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail=f"{name} not found")
+    return FileResponse(path, media_type="text/plain; charset=utf-8")
+
+@app.get("/humans.txt", include_in_schema=False)
+async def humans_txt() -> Response:
+    return _file("humans.txt")
+
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt() -> Response:
+    return _file("robots.txt")
+
+
+# -----------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
 

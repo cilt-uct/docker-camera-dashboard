@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import signal
 import socket
 import time
 import redis.asyncio as redis
@@ -44,7 +45,9 @@ def get_redis(settings):
         host=settings.REDIS_HOST,
         port=settings.REDIS_PORT,
         password=settings.REDIS_PASSWORD, #This line references a path for secret loading, but does not embed a secret.
-        decode_responses=True
+        decode_responses=True,
+        socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
+        socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT
     )
 
 async def fetch_cameras_from_redis(rc) -> list[dict]:
@@ -129,6 +132,48 @@ async def is_camera_alive(rtsp_url, timeout=2):
         # well some timeout or connection error occurred, so we assume the camera is not alive
         return False
 
+def _signal_process_group(pgid: int, sig: int):
+    try:
+        os.killpg(pgid, sig)
+    except ProcessLookupError:
+        pass
+
+async def run_with_timeout(cmd: list[str], timeout: float, kill_grace: float) -> tuple[int | None, bool]:
+    """
+    Run `cmd` in its own session/process group and wait at most `timeout` seconds.
+    On expiry (or cancellation) the whole group gets SIGTERM, then SIGKILL after
+    `kill_grace` seconds, and the child is always reaped.
+    Returns (returncode, timed_out).
+    """
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdin=asyncio.subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    pgid = proc.pid  # session leader => pgid == pid
+    try:
+        try:
+            return await asyncio.wait_for(proc.wait(), timeout=timeout), False
+        except TimeoutError:
+            pass
+
+        _signal_process_group(pgid, signal.SIGTERM)
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=kill_grace)
+        except TimeoutError:
+            pass
+        # Always SIGKILL the group: the leader may have exited while children linger
+        _signal_process_group(pgid, signal.SIGKILL)
+        await proc.wait()
+        return proc.returncode, True
+    finally:
+        if proc.returncode is None:
+            _signal_process_group(pgid, signal.SIGKILL)
+            try:
+                await asyncio.shield(proc.wait())
+            except asyncio.CancelledError:
+                pass
+
 async def _capture_one(loop, ca, settings, semaphore, rc):
     """
     Capture a single camera image with concurrency control.
@@ -157,18 +202,31 @@ async def _capture_one(loop, ca, settings, semaphore, rc):
         output_image.parent.mkdir(parents=True, exist_ok=True)
 
         logger.info(f"[CAPTURE] Camera {ca['name']} -> {output_image}")
-        ret = await loop.run_in_executor(
-            None,
-            call,
-            ["./scripts/capture_images.sh", ca['url'],
-                                            ca['name'],
-                                            str(output_image),
-                                            str(thumb_image),
-                                            str(logfile)]
-        )
+        started = time.monotonic()
+        try:
+            ret, timed_out = await run_with_timeout(
+                ["./scripts/capture_images.sh", ca['url'],
+                                                ca['name'],
+                                                str(output_image),
+                                                str(thumb_image),
+                                                str(logfile)],
+                timeout=settings.CAPTURE_TIMEOUT,
+                kill_grace=settings.PROCESS_KILL_GRACE,
+            )
+        except OSError as e:
+            elapsed = time.monotonic() - started
+            logger.error(f"[CAPTURE] Camera {ca['name']} failed to run capture script after {elapsed:.1f}s: {e}")
+            return
+        elapsed = time.monotonic() - started
+
+        if timed_out:
+            logger.warning(f"[CAPTURE] Camera {ca['name']} timed out after {elapsed:.1f}s "
+                           f"(limit {settings.CAPTURE_TIMEOUT}s); process group killed (exit {ret})")
+            return
 
         # If the capture command succeeded, record completion timestamp
         if ret == 0:
+            logger.info(f"[CAPTURE] Camera {ca['name']} completed in {elapsed:.1f}s")
             iso_ts = datetime.now().astimezone().isoformat(timespec='seconds')
             try:
                 await rc.hset(f"camera:{ca['name']}", "last_capture_completed", iso_ts)
@@ -178,7 +236,7 @@ async def _capture_one(loop, ca, settings, semaphore, rc):
             except Exception as e:
                 logger.warning(f"Failed to set last_capture_completed for {ca['name']}: {e}")
         else:
-            logger.warning(f"[CAPTURE] script returned {ret} for {ca['name']}")
+            logger.warning(f"[CAPTURE] Camera {ca['name']} failed in {elapsed:.1f}s: script returned {ret}")
 
 async def capture_images(settings):
     """
@@ -623,7 +681,7 @@ async def flush_dirty_cameras_to_db(settings):
             processed += 1
 
         await db.commit()
-        print(f"Flushed {processed} dirty cameras to DB")
+        logger.info(f"Flushed {processed} dirty cameras to DB")
 
     await engine.dispose()
 

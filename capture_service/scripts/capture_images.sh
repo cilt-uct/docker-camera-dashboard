@@ -7,8 +7,10 @@ OUTPUT_IMAGE="$3"
 THUMB_IMAGE="$4"
 LOGFILE="$5"
 
-# Hard timeout in seconds
+# Hard timeouts in seconds; KILL_AFTER escalates to SIGKILL if ffmpeg ignores SIGTERM
 CAPTURE_TIMEOUT=15
+THUMB_TIMEOUT=15
+KILL_AFTER=5
 
 # Thumbnail size for UI
 THUMB_WIDTH=640
@@ -18,8 +20,13 @@ THUMB_HEIGHT=480
 TMP_FULL="$(dirname "$OUTPUT_IMAGE")/.tmp_$(basename "$OUTPUT_IMAGE")"
 TMP_THUMB="$(dirname "$THUMB_IMAGE")/.tmp_$(basename "$THUMB_IMAGE")"
 
+trap 'rm -f "$TMP_FULL" "$TMP_THUMB"' EXIT
+
+# --foreground keeps ffmpeg in this script's process group, so the scheduler
+# can terminate the whole group if the script itself exceeds its deadline.
 # Capture full-resolution frame with timeout + low latency
-timeout "${CAPTURE_TIMEOUT}" ffmpeg \
+timeout --foreground -k "${KILL_AFTER}" "${CAPTURE_TIMEOUT}" ffmpeg \
+  -nostdin \
   -rtsp_transport tcp \
   -fflags nobuffer \
   -flags low_delay \
@@ -36,7 +43,6 @@ timeout "${CAPTURE_TIMEOUT}" ffmpeg \
   "$TMP_FULL" \
   > "$LOGFILE" 2>&1 || {
     echo "$(date) ERROR: Capture timed out or failed" >> "$LOGFILE"
-    rm -f "$TMP_FULL"
     exit 1
   }
 
@@ -44,12 +50,16 @@ timeout "${CAPTURE_TIMEOUT}" ffmpeg \
 mv -f "$TMP_FULL" "$OUTPUT_IMAGE"
 
 # Generate thumbnail (aspect-safe, padded)
-ffmpeg -y -i "$OUTPUT_IMAGE" \
+timeout --foreground -k "${KILL_AFTER}" "${THUMB_TIMEOUT}" ffmpeg \
+  -nostdin -y -i "$OUTPUT_IMAGE" \
   -vf "scale=${THUMB_WIDTH}:${THUMB_HEIGHT}:force_original_aspect_ratio=decrease,\
        pad=${THUMB_WIDTH}:${THUMB_HEIGHT}:(ow-iw)/2:(oh-ih)/2" \
   -q:v 3 \
   "$TMP_THUMB" \
-  >> "$LOGFILE" 2>&1
+  >> "$LOGFILE" 2>&1 || {
+    echo "$(date) ERROR: Thumbnail generation timed out or failed" >> "$LOGFILE"
+    exit 1
+  }
 
 # Atomic replace of thumbnail
 mv -f "$TMP_THUMB" "$THUMB_IMAGE"

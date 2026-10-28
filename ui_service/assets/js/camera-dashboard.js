@@ -19,7 +19,7 @@ class CameraDashboard {
         };
 
         this.refresh = options.refresh || false;
-        this.IGNORE_SCHEDULE = options.ignoreSchedule || ['podcast'];
+        this.IGNORE_SCHEDULE = options.ignoreSchedule || ['podcast', 'obs', 'obs1'];
 
         // Options for endpoints or selectors
         this.endpoints = {
@@ -79,7 +79,8 @@ class CameraDashboard {
     normalizeEventStatus(raw) {
         if (!raw) return "unknown";
         const s = raw.split(".").pop().toUpperCase();
-        if (s.includes("FAIL") || s.includes("CANCEL")) return "failed";
+        if (s.includes("RECORDING_FAILURE")) return "recording_failure";
+        if (s.includes("PROCESSING_FAILURE") || s.includes("PAUSED") || s.includes("CANCEL")) return "failed";
         if (s === "PROCESSED") return "finished";
         if (s.includes("RECORDING")) return "recording";
         if (s.includes("PROCESSING") || s.includes("INGESTING") || s.includes("PENDING")) return "processing";
@@ -241,6 +242,7 @@ class CameraDashboard {
             $(this.selectors.lastUpdated).text(`${new Date().toLocaleString()}`);
         } catch (err) {
             CameraDashboard.logMessage(`Failed to refresh data: ${err}`, 'error');
+            throw err;
         }
     }
 

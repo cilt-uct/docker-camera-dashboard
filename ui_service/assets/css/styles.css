@@ -2,6 +2,7 @@
 :root {
   --color-green: #28a745;
   --color-red: #dc3545;
+  --color-dark-red: #a00010;
   --color-grey: #6c757d;
   --color-orange: #ffc107;
   --color-blue: #007bff;
@@ -428,6 +429,11 @@ a.schedule-event:hover, a.schedule-event:focus {
 
 .schedule-event.status-failed {
   background: var(--color-red);
+  color: var(--color-white);
+}
+
+.schedule-event.status-recording_failure {
+  background: var(--color-dark-red);
   color: var(--color-white);
 }
 

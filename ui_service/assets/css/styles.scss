@@ -2,6 +2,7 @@
 :root {
     --color-green: #28a745;
     --color-red: #dc3545;
+    --color-dark-red: #a00010;
     --color-grey: #6c757d;
     --color-orange: #ffc107;
     --color-blue: #007bff;
@@ -373,6 +374,7 @@ a.schedule-event {
 @include schedule-event(processing, #a3d500, var(--color-black));
 @include schedule-event(finished, var(--color-green));
 @include schedule-event(failed, var(--color-red));
+@include schedule-event(recording_failure, var(--color-dark-red));
 @include schedule-event(unknown, #adb5bd, var(--color-black));
 
 @include schedule-status(online, var(--color-green));

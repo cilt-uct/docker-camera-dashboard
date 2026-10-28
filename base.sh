@@ -146,3 +146,6 @@ export GIT_COMMITTER_NAME="$name"
 export GIT_COMMITTER_EMAIL="$email"
 export GIT_AUTHOR_NAME="$name"
 export GIT_AUTHOR_EMAIL="$email"
+
+export VERSION_TAG=$(tr -d ' \n\r\t' < VERSION)
+version=$(tr -d ' \n\r\t' < VERSION)

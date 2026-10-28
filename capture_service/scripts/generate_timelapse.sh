@@ -37,7 +37,7 @@ cleanup() {
 trap cleanup EXIT
 
 # ---- Build sorted list of recent images ----
-find "$IMAGE_DIR" -type f -name "*.jpg" -mtime -1 | sort | tail -n "$MAX_FRAMES" > "$IMAGE_LIST"
+find "$IMAGE_DIR" -type f -name "*.jpg" -mtime -1 2>> "$LOGFILE" | sort | tail -n "$MAX_FRAMES" > "$IMAGE_LIST"
 
 if [[ ! -s "$IMAGE_LIST" ]]; then
   echo "$(date) ERROR: No images found" >> "$LOGFILE"

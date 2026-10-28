@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 
+from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
@@ -38,6 +39,7 @@ class FetchSettings(BaseSettings):
     _env_file_used: Optional[str] = None
 
     ROOT_PATH: str = Field(default='/cams', validation_alias='ROOT_PATH')
+    APP_DIR: Path = Field(default=os.getenv("APP_DIR", "/app"), validation_alias='APP_DIR', description='Application directory.')
 
     TITLE: str = Field(default='Camera Dashboard Service', description='The title of the service.')
     VERSION: str = Field(default='0.0.1')
@@ -81,18 +83,29 @@ class FetchSettings(BaseSettings):
     BATCH_SIZE: int = Field(default=10, description='Number of cameras to run concurrently')
     BATCH_DELAY: int = Field(default=10, description='Seconds between batches')
 
+    # Worst case for capture_images.sh is ~40s (2 x (15s timeout + 5s kill-after)), so allow headroom
+    CAPTURE_TIMEOUT: int = Field(default=60, description='Max seconds for one camera capture script before its process group is killed.')
+    PROCESS_KILL_GRACE: int = Field(default=5, description='Seconds between SIGTERM and SIGKILL when killing a timed-out process group.')
+
+    REDIS_SOCKET_TIMEOUT: float = Field(default=10, validation_alias='REDIS_SOCKET_TIMEOUT', description='Seconds before a Redis read/write operation times out.')
+    REDIS_CONNECT_TIMEOUT: float = Field(default=5, validation_alias='REDIS_CONNECT_TIMEOUT', description='Seconds before a Redis connection attempt times out.')
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         # Save env_file if passed explicitly
         self._env_file_used = kwargs.get('_env_file')
-        logger.debug(f"Using env file: {env_file}")
+        logger.debug(f"Using env file: {self._env_file_used}")
 
         self.SERVER_TYPE = kwargs.get('SERVER_TYPE', self.SERVER_TYPE)
 
         # if we are running as script then we don't need the rest of the initialization to happen
         if 'script' in self.SERVER_TYPE:
             return
+
+        if os.path.isfile('VERSION'):
+            with open('VERSION', 'r') as file:
+                self.VERSION = ''.join(file.read().split())
 
         # explicitly set self.Redis_password, was returning the file path name
         password_file = "/run/secrets/redis_password"

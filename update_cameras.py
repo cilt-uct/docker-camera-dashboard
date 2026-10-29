@@ -1,19 +1,16 @@
-#!/usr/bin/env python3
-
 """Fetch cameras from Opencast and store them in the Database"""
 
 import asyncio
-import time
 import sys
+import time
 import traceback
 
 from opencast.opencast import CaptureAgent
-
-from utils.settings import FetchSettings
-from utils.database import create_db
-
 from utils.camera import CameraRepository
+from utils.database import create_db
 from utils.schemas import CameraCreate
+from utils.settings import FetchSettings
+
 
 async def run(settings):
     engine, AsyncSessionLocal = create_db(settings)
@@ -68,7 +65,7 @@ def main(settings):
     except KeyboardInterrupt:
         sys.exit(0)
 
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         print(f'ERR: {e}')
         traceback.print_exc()
 

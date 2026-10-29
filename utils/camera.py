@@ -1,11 +1,11 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.mysql import insert as mysql_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func as sql_func
-from typing import Optional, List
 
 from utils.models import Camera
 from utils.schemas import CameraCreate, CameraUpdate
+
 
 class CameraRepository:
     def __init__(self, db: AsyncSession):
@@ -38,7 +38,7 @@ class CameraRepository:
             # Create new camera
             return await self.create(camera_data)
 
-    async def upsert_many(self, cameras_data: List[CameraCreate]) -> List[Camera]:
+    async def upsert_many(self, cameras_data: list[CameraCreate]) -> list[Camera]:
         """
         Insert or update multiple cameras efficiently using MySQL's ON DUPLICATE KEY UPDATE.
         This is more efficient than doing individual upserts.
@@ -76,14 +76,14 @@ class CameraRepository:
 
         return cameras
 
-    async def get_by_id(self, camera_id: int) -> Optional[Camera]:
+    async def get_by_id(self, camera_id: int) -> Camera | None:
         """Get camera by ID"""
         result = await self.db.execute(
             select(Camera).where(Camera.id == camera_id)
         )
         return result.scalar_one_or_none()
 
-    async def get_by_name(self, name: str) -> Optional[Camera]:
+    async def get_by_name(self, name: str) -> Camera | None:
         """Get camera by name"""
         result = await self.db.execute(
             select(Camera).where(Camera.name == name)
@@ -95,12 +95,12 @@ class CameraRepository:
         skip: int = 0,
         limit: int = 200,
         enabled_only: bool = False
-    ) -> List[Camera]:
+    ) -> list[Camera]:
         """Get all cameras with pagination"""
         query = select(Camera)
 
         if enabled_only:
-            query = query.where(Camera.enabled == True) # noqa: E712
+            query = query.where(Camera.enabled)
 
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
@@ -110,7 +110,7 @@ class CameraRepository:
         self,
         camera_id: int,
         update_data: CameraUpdate
-    ) -> Optional[Camera]:
+    ) -> Camera | None:
         """Update camera"""
         # Filter out None values
         update_dict = {

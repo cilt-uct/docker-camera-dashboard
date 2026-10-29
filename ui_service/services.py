@@ -1,14 +1,15 @@
 import asyncio
 import hashlib
 import json
-
-from fastapi import Request, HTTPException
 from datetime import datetime
 
-from utils.settings import logger
-from core import settings, redis_client
+from core import redis_client, settings
+from fastapi import HTTPException, Request
+from files import get_image_url, get_thumbnail, get_timelapse_url
 from models import CameraResponse, CameraResponseMinimal, CaptureAgent
-from files import get_image_url, get_timelapse_url, get_thumbnail
+
+from utils.logger import logger
+
 
 async def ensure_camera_exists(camera_name: str):
     exists = await redis_client.exists(f"camera:{camera_name}")
@@ -27,7 +28,7 @@ def get_camera_status(last_capture_completed:str) -> str:
         t = datetime.fromisoformat(last_capture_completed)
 
         return "online" if (now - t).total_seconds() <= settings.STATUS_INTERVAL else "offline"
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.error(f'{last_capture_completed} : {e}')
         return "offline"
 

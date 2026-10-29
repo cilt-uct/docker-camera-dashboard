@@ -1,24 +1,13 @@
 import os
-import sys
-import logging
-
 from pathlib import Path
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
-
 from urllib.parse import quote_plus
 
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from opencast.opencast import Opencast
+from utils.logger import logger
 from utils.simple import SimpleHTML
-
-logging.basicConfig(stream=sys.stdout,
-        level=logging.INFO,
-        format='%(asctime)s %(process)d %(levelname)-8s %(filename)s(%(lineno)d) %(message)s')
-
-logging.getLogger("httpx").setLevel(logging.WARNING)
-
-logger = logging.getLogger()
 
 DEFAULT_ENV_FILES = [
     "/run/secrets/passwords",
@@ -36,7 +25,7 @@ class FetchSettings(BaseSettings):
                                         extra='ignore')
 
     # Store the env_file path manually
-    _env_file_used: Optional[str] = None
+    _env_file_used: str | None = None
 
     ROOT_PATH: str = Field(default='/cams', validation_alias='ROOT_PATH')
     APP_DIR: Path = Field(default=os.getenv("APP_DIR", "/app"), validation_alias='APP_DIR', description='Application directory.')
@@ -57,7 +46,7 @@ class FetchSettings(BaseSettings):
     REDIS_HOST: str = Field(default='localhost', validation_alias='REDIS_HOST', description='Redis host.')
     REDIS_PASSWORD: str = Field(default='', validation_alias='REDIS_PASSWORD', description='Redis password.')
     REDIS_PORT: int = Field(default=6379, validation_alias='REDIS_PORT', description='Redis port.')
-    REDIS_CLEAN_START: bool = Field(default=False, validation_alias='REDIS_CLEAN_START', description='Whether to clear Redis on startup.')
+    REDIS_CLEAN_START: bool = Field(default=False, validation_alias='REDIS_CLEAN_START', description='Whether to clear capture-service Redis caches on startup, preserving service metadata.')
 
     OC_HOST: str = Field(default='localhost', validation_alias='OC_SERVER', description='Opencast server URL.')
     OC_USER: str = Field(default='opencast', validation_alias='OC_USER', description='Opencast username.')
@@ -116,7 +105,7 @@ class FetchSettings(BaseSettings):
                     self.REDIS_PASSWORD = f.read().strip()
 
                 logger.debug(f"Redis password loaded from secret file (length: {len(self.REDIS_PASSWORD)})")
-            except Exception as e:
+            except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
                 logger.error(f"Failed to read Redis password file: {e}")
                 self.REDIS_PASSWORD = ""
         else:

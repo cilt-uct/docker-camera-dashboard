@@ -94,6 +94,9 @@ Configuration is handled via environment variables and a pydantic settings class
 - `TIMELAPSE_DIR` (default: `/shared_volume/timelapse`)
 - `CAPTURE_INTERVAL`, `TIMELAPSE_INTERVAL`, `CLEAN_INTERVAL`
 - `BATCH_SIZE`, `BATCH_DELAY`
+- `REDIS_CLEAN_START` (default: `false`) — clears capture-service cache keys
+  (`camera:*`, `ca:*`, `schedule:*`, `pyca:*`) on scheduler startup.
+  Service startup timestamps and unrelated Redis keys are preserved.
 
 Compose uses secrets for Redis and service passwords as configured in `docker-compose.yml`.
 
@@ -170,6 +173,13 @@ python main.py
 
 ## Troubleshooting
 
+- If either service reports a circular import involving `utils.settings`,
+  `opencast.opencast`, and `utils.rest`, ensure the REST client uses
+  `logging.getLogger(__name__)` rather than importing a logger from settings.
+  With the supplied Compose bind mounts, apply the fix and restart both services:
+  `docker-compose restart ui_service capture_service`.
+  Run `python -m unittest -v test_imports` with the service dependencies installed
+  to check the import paths without connecting to external services.
 - Check container logs for errors (ffmpeg failures, permission issues):
   `docker-compose logs -f capture_service`
 - Ensure `ffmpeg` is installed in the `capture_service` image and accessible in PATH.

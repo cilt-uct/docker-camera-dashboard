@@ -9,5 +9,5 @@ python-dateutil==2.9.0.post0
 redis==6.2.0
 urllib3==2.8.0
 sqlalchemy==2.0.23
-asyncmy==0.2.9
+asyncmy==0.2.17
 cryptography>=46.0.0

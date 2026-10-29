@@ -1,6 +1,7 @@
-from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import Optional
+
+from pydantic import BaseModel, ConfigDict
+
 
 class CameraBase(BaseModel):
     name: str
@@ -11,19 +12,19 @@ class CameraCreate(CameraBase):
     pass
 
 class CameraUpdate(BaseModel):
-    name: Optional[str] = None
-    url: Optional[str] = None
-    enabled: Optional[bool] = None
-    last_capture_attempt: Optional[datetime] = None
-    last_capture_completed: Optional[datetime] = None
-    last_timelapse_run: Optional[datetime] = None
+    name: str | None = None
+    url: str | None = None
+    enabled: bool | None = None
+    last_capture_attempt: datetime | None = None
+    last_capture_completed: datetime | None = None
+    last_timelapse_run: datetime | None = None
 
 class CameraResponse(CameraBase):
     id: int
     created_at: datetime
     updated_at: datetime
-    last_capture_attempt: Optional[datetime] = None
-    last_capture_completed: Optional[datetime] = None
-    last_timelapse_run: Optional[datetime] = None
+    last_capture_attempt: datetime | None = None
+    last_capture_completed: datetime | None = None
+    last_timelapse_run: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -1,6 +1,7 @@
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Optional, Iterable, Dict, List, Any
+from typing import Any
 
 
 def normalize_items(capabilities: Any) -> Iterable[dict]:
@@ -25,7 +26,7 @@ def normalize_items(capabilities: Any) -> Iterable[dict]:
     return []
 
 
-def extract_presenter_src(agent: dict) -> Optional[str]:
+def extract_presenter_src(agent: dict) -> str | None:
     """
     Extract capture.device.presenter.src from agent.
     Returns None if missing or invalid.
@@ -37,7 +38,7 @@ def extract_presenter_src(agent: dict) -> Optional[str]:
     return None
 
 
-def load_agents(path: Path) -> List[Dict[str, Optional[str]]]:
+def load_agents(path: Path) -> list[dict[str, str | None]]:
     with path.open(encoding="utf-8") as f:
         data = json.load(f)
 

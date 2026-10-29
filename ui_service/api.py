@@ -1,14 +1,18 @@
-from fastapi import APIRouter, Request, Response, HTTPException
-from typing import List, Dict
-
-from utils.settings import logger
-from core import settings, redis_client
+from core import redis_client, settings
+from fastapi import APIRouter, HTTPException, Request, Response
 from models import CameraCurrentResponse, CameraTimelapseResponse
 from services import (
-    ensure_camera_exists, generate_etag,
-    get_camera_current, get_camera_timelapse,
-    fetch_cameras, fetch_agents, fetch_schedule, fetch_pyca
+    ensure_camera_exists,
+    fetch_agents,
+    fetch_cameras,
+    fetch_pyca,
+    fetch_schedule,
+    generate_etag,
+    get_camera_current,
+    get_camera_timelapse,
 )
+
+from utils.logger import logger
 
 router = APIRouter()
 
@@ -30,7 +34,7 @@ async def get_cameras(request: Request, response: Response):
             "version": etag
         }
 
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.exception("Failed to get cameras")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -77,7 +81,7 @@ async def get_capture_agent_details(request: Request, response: Response):
             "version": etag
         }
 
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.exception("Failed to get capture agents")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -97,7 +101,7 @@ async def get_schedule(response: Response):
             "version": etag
         }
 
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.exception("Failed to get schedule")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -117,7 +121,7 @@ async def get_pyca(response: Response):
             "version": etag
         }
 
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.exception("Failed to get PyCA's")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -127,9 +131,9 @@ async def get_cameras_activity(request: Request):
     """Return counts and lists of online/offline cameras based on `last_capture_completed`."""
 
     try:
-        online: List[str] = []
-        offline: List[str] = []
-        timestamps: Dict[str, str | None] = {}
+        online: list[str] = []
+        offline: list[str] = []
+        timestamps: dict[str, str | None] = {}
 
         cameras = await fetch_cameras(request, full=False)
         for cam in cameras:
@@ -149,6 +153,6 @@ async def get_cameras_activity(request: Request):
             "offline": offline,
             "last_capture_completed": timestamps
         }
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.exception("Failed to get camera activities")
         raise HTTPException(status_code=500, detail=str(e))

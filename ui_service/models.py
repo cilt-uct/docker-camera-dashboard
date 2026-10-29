@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+
 
 # Model for response
 class CameraResponse(BaseModel):
@@ -7,35 +7,35 @@ class CameraResponse(BaseModel):
     fullname: str
     state: str
     current: str
-    image_url: Optional[str] = None
-    # image_log: Optional[str] = None
-    thumbnail: Optional[str] = None
-    # timelapse: Optional[str] = None
-    # timelapse_webm_url: Optional[str] = None
-    # timelapse_mp4_url: Optional[str] = None
-    # timelapse_thumb_url: Optional[str] = None
-    # timelapse_log: Optional[str] = None
+    image_url: str | None = None
+    # image_log: str | None = None
+    thumbnail: str | None = None
+    # timelapse: str | None = None
+    # timelapse_webm_url: str | None = None
+    # timelapse_mp4_url: str | None = None
+    # timelapse_thumb_url: str | None = None
+    # timelapse_log: str | None = None
     # Timestamps — may be None if never set
-    last_capture_completed: Optional[str] = None
-    last_capture_attempt: Optional[str] = None
-    last_timelapse_run: Optional[str] = None
+    last_capture_completed: str | None = None
+    last_capture_attempt: str | None = None
+    last_timelapse_run: str | None = None
 
 class CameraResponseMinimal(BaseModel):
     name: str
     fullname: str
     state: str
     # Timestamps — may be None if never set
-    last_capture_completed: Optional[str] = None
-    last_capture_attempt: Optional[str] = None
-    last_timelapse_run: Optional[str] = None
+    last_capture_completed: str | None = None
+    last_capture_attempt: str | None = None
+    last_timelapse_run: str | None = None
 
 class CaptureAgent(BaseModel):
     name: str
     display: str
     state: str
     # Timestamps — may be None if never set
-    time_since_last_update: Optional[int] = None
-    last_updated: Optional[str] = None
+    time_since_last_update: int | None = None
+    last_updated: str | None = None
 
 class CameraCurrentResponse(BaseModel):
     image_url: str | None

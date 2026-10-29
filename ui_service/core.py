@@ -1,7 +1,9 @@
 import logging
+
 import redis.asyncio as redis
 
-from utils.settings import FetchSettings, logger
+from utils.logger import logger
+from utils.settings import FetchSettings
 
 settings = FetchSettings()
 settings.TITLE = "Display Camera Images Service"
@@ -25,7 +27,7 @@ class UvicornParseErrorHandler(logging.Handler):
                     logger.warning(f"[HTTP PARSE ERROR] {msg} client={client}", exc_info=record.exc_info)
                 else:
                     logger.warning(f"[HTTP PARSE ERROR] {msg}", exc_info=record.exc_info)
-        except Exception:
+        except Exception: # noqa: BLE001,S110 Do not catch blind exception: `Exception`
             # Never let logging failures crash the app
             pass
 
@@ -34,7 +36,7 @@ def _attach_uvicorn_parse_handler():
         uv_err = logging.getLogger("uvicorn.error")
         uv_err.setLevel(logging.DEBUG)
         uv_err.addHandler(UvicornParseErrorHandler())
-    except Exception:
+    except Exception: # noqa: BLE001,S110 Do not catch blind exception: `Exception`
         # logging attached failed, but we don't want to crash the app for that
         pass
 

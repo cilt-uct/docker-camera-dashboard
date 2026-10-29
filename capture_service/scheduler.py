@@ -4,22 +4,21 @@ import os
 import signal
 import socket
 import time
-import redis.asyncio as redis
-
-from urllib.parse import urlparse
-from dateutil.parser import parse as parse_dt
-from datetime import datetime, timedelta, timezone
-from apscheduler.schedulers.background import BackgroundScheduler
-from subprocess import call
-
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from subprocess import call
+from urllib.parse import urlparse
 
-from utils.settings import FetchSettings, logger
-from utils.database import create_db
-from utils.camera import CameraRepository
-from utils.schemas import CameraCreate, CameraUpdate
+import redis.asyncio as redis
+from apscheduler.schedulers.background import BackgroundScheduler
+from dateutil.parser import parse as parse_dt
 
 from opencast.opencast import CaptureAgent
+from utils.camera import CameraRepository
+from utils.database import create_db
+from utils.logger import logger
+from utils.schemas import CameraCreate, CameraUpdate
+from utils.settings import FetchSettings
 
 settings = FetchSettings()
 settings.TITLE = "Fetch Camera Images Service"
@@ -36,7 +35,7 @@ def str_to_dt_or_none(s: str):
         return None
     try:
         return parse_dt(s)
-    except Exception:
+    except Exception: # noqa: BLE001 - rollback is best-effort; original error preserved
         # if parsing of datetime fails, return None
         return None
 
@@ -73,7 +72,7 @@ async def mark_camera_dirty(rc, camera_name: str):
     try:
         await rc.sadd("camera:dirty", camera_name)
         logger.debug(f"Marked camera {camera_name} as dirty")
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.warning(f"Failed to mark camera {camera_name} as dirty: {e}")
 
 def normalize_agent_status(status: str) -> str:
@@ -98,7 +97,7 @@ def format_datetime_for_redis(dt_value):
         # Handle UTC format with Z
         if dt_value.endswith('Z'):
             try:
-                utc_time = datetime.fromisoformat(dt_value.replace('Z', '+00:00'))
+                utc_time = datetime.fromisoformat(dt_value)
                 local_time = utc_time.astimezone()
                 return local_time.isoformat(timespec='seconds')
             except ValueError:
@@ -128,7 +127,7 @@ async def is_camera_alive(rtsp_url, timeout=2):
         conn = await asyncio.wait_for(fut, timeout=timeout)
         conn.close()
         return True
-    except Exception:
+    except Exception: # noqa: BLE001 - rollback is best-effort; original error preserved
         # well some timeout or connection error occurred, so we assume the camera is not alive
         return False
 
@@ -187,7 +186,7 @@ async def _capture_one(loop, ca, settings, semaphore, rc):
             await mark_camera_dirty(rc, ca['name'])
 
             logger.debug(f"Set last_capture_attempt for camera:{ca['name']}={iso_ts}")
-        except Exception as e:
+        except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
             logger.warning(f"Failed to set last_capture_attempt for {ca['name']}: {e}")
 
         if not await is_camera_alive(ca["url"]):
@@ -233,7 +232,7 @@ async def _capture_one(loop, ca, settings, semaphore, rc):
                 await mark_camera_dirty(rc, ca['name'])
 
                 logger.debug(f"Set last_capture_completed for camera:{ca['name']}={iso_ts}")
-            except Exception as e:
+            except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
                 logger.warning(f"Failed to set last_capture_completed for {ca['name']}: {e}")
         else:
             logger.warning(f"[CAPTURE] Camera {ca['name']} failed in {elapsed:.1f}s: script returned {ret}")
@@ -274,10 +273,10 @@ async def capture_images(settings):
             close_coro = rc.aclose()
             if close_coro and asyncio.iscoroutine(close_coro):
                 await close_coro
-        except Exception:
+        except Exception: # noqa: BLE001 - rollback is best-effort; original error preserved
             try:
                 await rc.connection_pool.disconnect()
-            except Exception:
+            except Exception: # noqa: BLE001,S110 - rollback is best-effort; original error preserved
                 # if pool does not disconnect, just pass
                 pass
 
@@ -308,7 +307,7 @@ async def _generate_timelapse(loop, ca, settings, semaphore, rc):
                 await mark_camera_dirty(rc, ca['name'])
 
                 logger.debug(f"Set last_timelapse_run for camera:{ca['name']}={iso_ts}")
-            except Exception as e:
+            except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
                 logger.warning(f"Failed to set last_timelapse_run for {ca['name']}: {e}")
         else:
             logger.warning(f"[Timelapse] script returned {ret} for {ca['name']}")
@@ -348,10 +347,10 @@ async def generate_timelapses(settings):
             close_coro = rc.aclose()
             if close_coro and asyncio.iscoroutine(close_coro):
                 await close_coro
-        except Exception:
+        except Exception: # noqa: BLE001 - rollback is best-effort; original error preserved
             try:
                 await rc.connection_pool.disconnect()
-            except Exception:
+            except Exception: # noqa: BLE001,S110 - rollback is best-effort; original error preserved
                 # if pool does not disconnect, just pass
                 pass
 
@@ -471,7 +470,7 @@ def map_external_event(ev: dict) -> dict:
     if start_dt is not None and ev.get('duration') not in (None, ''):
         try:
             end_dt = start_dt + timedelta(milliseconds=int(ev['duration']))
-            end = end_dt.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+            end = end_dt.astimezone(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
         except (TypeError, ValueError):
             end = None
 
@@ -504,8 +503,8 @@ async def update_schedule(settings):
         events = []
         offset = 0
         while True:
-            results = oc.get_events(start_date=start_local.astimezone(timezone.utc).strftime(utc_fmt),
-                                    end_date=end_local.astimezone(timezone.utc).strftime(utc_fmt),
+            results = oc.get_events(start_date=start_local.astimezone(UTC).strftime(utc_fmt),
+                                    end_date=end_local.astimezone(UTC).strftime(utc_fmt),
                                     sort='location:ASC',
                                     withPublications=False,
                                     withScheduling=True,
@@ -560,12 +559,12 @@ async def update_schedule(settings):
         await rc.set("schedule:today", json.dumps(payload))
         logger.info(f"Updated schedule: {len(events)} events in {len(locations)} locations")
 
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.exception(f"Failed to update schedule: {e}")
     finally:
         try:
             await rc.aclose()
-        except Exception:
+        except Exception: # noqa: BLE001, S110 - rollback is best-effort; original error preserved
             # closing the client should never crash the job
             pass
 
@@ -607,7 +606,7 @@ async def update_pycas(settings):
             await pipe.execute()
 
         logger.info(f"Updated Pycas servers: {len(servers)} found")
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.exception(f"Failed to update Pycas servers: {e}")
 
 # -----------------------------------------------
@@ -627,7 +626,7 @@ def clean_images(settings):
                 try:
                     os.remove(file_path)
                     logger.debug(f"Deleted file: {file_path}")
-                except Exception as e:
+                except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
                     logger.error(f"Error deleting {file_path}: {e}")
 
         # Optionally remove empty directories after deleting files
@@ -637,7 +636,7 @@ def clean_images(settings):
                 try:
                     os.rmdir(dir_path)
                     logger.debug(f"Deleted empty folder: {dir_path}")
-                except Exception as e:
+                except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
                     logger.error(f"Error deleting folder {dir_path}: {e}")
 
 async def flush_dirty_cameras_to_db(settings):
@@ -688,10 +687,19 @@ async def flush_dirty_cameras_to_db(settings):
 async def clear_redis_on_startup(settings):
     rc = get_redis(settings)
 
-    # Clear the current database only
-    await rc.flushdb()
+    try:
+        for pattern in ("camera:*", "ca:*", "schedule:*", "pyca:*"):
+            cursor = 0
+            while True:
+                cursor, keys = await rc.scan(cursor=cursor, match=pattern, count=100)
+                if keys:
+                    await rc.delete(*keys)
+                if cursor == 0:
+                    break
+    finally:
+        await rc.aclose()
 
-    logger.info("Redis cleared on startup")
+    logger.info("Capture-service Redis caches cleared on startup; service metadata preserved")
 
 # Database -> Redis Sync Function
 # -----------------------------------------------

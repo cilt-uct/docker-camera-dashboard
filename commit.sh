@@ -19,7 +19,7 @@ cat > humans.txt <<EOF
 /* TEAM */
 Your title: CILT - LT Team
 Site: http://www.cilt.uct.ac.za/
-Repo: https://github.com/cilt-uct/docker-camera-dashboard
+Repo: https://$GITHUB
 Location: Cape Town, South Africa
 
 /* THANKS */

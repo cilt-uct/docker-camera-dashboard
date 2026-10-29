@@ -1,14 +1,11 @@
-import httpx
-import logging
 import json
 import re
-
-from bs4 import BeautifulSoup
 from datetime import datetime
 
-from .rest import RestClient
+import httpx
+from bs4 import BeautifulSoup
 
-logger = logging.getLogger(__name__)
+from .rest import RestClient
 
 try:
     import json5  # handles unquoted keys, trailing commas, comments
@@ -17,7 +14,7 @@ except ImportError:
 
 PAGE_URL = "https://srvubuopc301.uct.ac.za/"  # change to your page
 
-class SimpleHTML(object):
+class SimpleHTML:
 
     def __init__(
         self,
@@ -28,7 +25,7 @@ class SimpleHTML(object):
         timeout: float = 5,
         retries: int = 3,
         backoff_factor: float = 0.3,
-        headers: dict = None
+        headers: dict | None = None
         ) -> None:
         """Instantiates library.
 
@@ -80,7 +77,7 @@ class SimpleHTML(object):
         if getattr(resp, 'status_code', None) == 200:
             try:
                 return resp.text
-            except Exception:
+            except Exception: # noqa: BLE001 Do not catch blind exception: `Exception`
                 # if parsing of json fails, return None
                 return None
         return None
@@ -143,7 +140,7 @@ class SimpleHTML(object):
             result = self.js_literal_to_python(literal)
             return result
 
-        except Exception as e:
+        except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
             print(f"Error fetching HTML from {url}: {e}")
             return []
 

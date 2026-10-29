@@ -1,14 +1,14 @@
-import httpx
 import logging
+from datetime import datetime, timedelta
+from typing import Any
+
+import httpx
 
 from utils.rest import RestClient
 
-from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
-
 logger = logging.getLogger(__name__)
 
-class Opencast(object):
+class Opencast:
 
     def __init__(
         self,
@@ -20,7 +20,7 @@ class Opencast(object):
         timeout: float = 10,
         retries: int = 3,
         backoff_factor: float = 0.3,
-        headers: dict = None
+        headers: dict | None = None
         ) -> None:
         """Instantiates library.
 
@@ -72,7 +72,7 @@ class Opencast(object):
         if getattr(resp, 'status_code', None) == 200:
             try:
                 return resp.json()
-            except Exception:
+            except Exception: # noqa: BLE001 Do not catch blind exception: `Exception`
                 # if parsing of json fails, return None
                 return None
         return None
@@ -155,14 +155,14 @@ class Opencast(object):
         if resp and getattr(resp, 'status_code', None) == 200:
             try:
                 return resp.json()
-            except Exception:
+            except Exception: # noqa: BLE001 Do not catch blind exception: `Exception`
                 # if parsing of json fails, return None
                 return None
 
         return None
 
 class CaptureAgent:
-    def __init__(self, data: Dict[str, Any]):
+    def __init__(self, data: dict[str, Any]):
         self._raw = data
 
         self.name: str = data.get("name")
@@ -176,7 +176,7 @@ class CaptureAgent:
         except OverflowError:
             self.last_updated = None
 
-        self._capabilities: Dict[str, Any] = {}
+        self._capabilities: dict[str, Any] = {}
 
         raw_items = data.get("capabilities", {}).get("item", [])
 
@@ -199,16 +199,16 @@ class CaptureAgent:
 
     # ---- API ----
 
-    def get(self, key: str, default: Optional[Any] = None) -> Any:
+    def get(self, key: str, default: Any | None = None) -> Any:
         return self._raw.get(key, default)
 
-    def get_capability(self, key: str, default: Optional[Any] = None) -> Any:
+    def get_capability(self, key: str, default: Any | None = None) -> Any:
         return self._capabilities.get(key, default)
 
     def has_capability(self, key: str) -> bool:
         return key in self._capabilities
 
-    def all_capabilities(self) -> Dict[str, Any]:
+    def all_capabilities(self) -> dict[str, Any]:
         return self._capabilities
 
     def device_names(self) -> list[str]:

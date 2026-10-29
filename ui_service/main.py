@@ -1,16 +1,16 @@
-from fastapi import FastAPI, HTTPException,Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, Response
 from contextlib import asynccontextmanager
-
 from datetime import datetime
 
-from jinja2 import Environment, FileSystemLoader
+from core import redis_client, settings
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import Environment, FileSystemLoader
 
 # Configuration
-from utils.settings import logger
-from core import settings, redis_client
+from utils.logger import logger
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI):
     try:
         await redis_client.set("ui_service_start", start_time)
         logger.info(f"UI started at {start_time}")
-    except Exception as e:
+    except Exception as e: # noqa: BLE001 Do not catch blind exception: `Exception`
         logger.warning(f"Failed to write startup time to Redis: {e}")
 
     yield
@@ -45,6 +45,7 @@ def get_home(request: Request):
 
 # API -------------------------------------------------------
 from api import router as api_router
+
 app.include_router(api_router)
 
 # Status ----------------------------------------------------

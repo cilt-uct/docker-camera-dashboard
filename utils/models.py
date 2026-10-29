@@ -1,7 +1,8 @@
-from sqlalchemy import Column, BigInteger, String, Boolean, DateTime
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, String
 from sqlalchemy.sql import func as sql_func
 
 from utils.database import Base
+
 
 class Camera(Base):
     __tablename__ = "cameras"

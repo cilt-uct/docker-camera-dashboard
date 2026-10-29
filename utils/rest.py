@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 # Rest client used across scripts
 
 # Usage examples
@@ -10,11 +8,13 @@
 #     async with RestClient(base_url, auth=(user, pw)) as client:
 #         resp = await client.async_request('GET', url)
 
-import httpx
+import asyncio
 import logging
 import time
-import asyncio
-from typing import Optional
+
+import httpx
+
+logger = logging.getLogger(__name__)
 
 # Status codes that should trigger a retry
 _STATUS_FORCELIST = {429, 500, 502, 503, 504}
@@ -35,10 +35,10 @@ class RestClient:
         await client.async_request('GET', '/path')
     """
 
-    def __init__(self, base_url: Optional[str] = None,
-                 auth: Optional[tuple] = None, auth_type: str = 'basic',
+    def __init__(self, base_url: str | None = None,
+                 auth: tuple | None = None, auth_type: str = 'basic',
                  timeout: float = 10, retries: int = 3, backoff_factor: float = 0.3,
-                 headers: Optional[dict] = None):
+                 headers: dict | None = None):
 
         self.base_url = base_url.rstrip('/') if isinstance(base_url, str) else base_url
         self.timeout = timeout
@@ -50,8 +50,8 @@ class RestClient:
 
         self._use_requests_digest = False
         self._requests_session = None
-        self._client: Optional[httpx.Client] = None
-        self._async_client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.Client | None = None
+        self._async_client: httpx.AsyncClient | None = None
 
         if auth:
             user, password = auth[0], auth[1]
@@ -60,11 +60,11 @@ class RestClient:
                 try:
                     from httpx import DigestAuth as _HttpxDigestAuth
                     self._auth = _HttpxDigestAuth(user, password)
-                except Exception:
+                except Exception: # noqa: BLE001 Do not catch blind exception: `Exception`
                     # retry with basic request class
                     import requests
-                    from requests.auth import HTTPDigestAuth
                     from requests.adapters import HTTPAdapter
+                    from requests.auth import HTTPDigestAuth
                     from urllib3.util.retry import Retry
 
                     self._use_requests_digest = True
@@ -93,7 +93,7 @@ class RestClient:
             # create a persistent client for sync requests
             self._client = httpx.Client(auth=self._auth, timeout=self.timeout, headers=self.headers)
 
-    def request(self, method: str, url: str, params: Optional[dict] = None, payload_data=None, files=None, headers=None, timeout: Optional[float] = None) -> Optional[object]:
+    def request(self, method: str, url: str, params: dict | None = None, payload_data=None, files=None, headers=None, timeout: float | None = None) -> object | None:
         """Synchronous request."""
         method = (method or 'GET').upper()
         if method == 'GET' and (files is not None or payload_data is not None):
@@ -117,7 +117,7 @@ class RestClient:
                     resp = self._requests_session.request(method, url, timeout=timeout, **kwargs)
 
                     if resp.status_code in _STATUS_FORCELIST:
-                        logging.warning("API call %s returned transient status %s (attempt %s/%s)", url, resp.status_code, attempt, self.retries)
+                        logger.warning("API call %s returned transient status %s (attempt %s/%s)", url, resp.status_code, attempt, self.retries)
                         if attempt == self.retries:
                             return resp
                         time.sleep(_calc_backoff(attempt, self.backoff_factor))
@@ -126,14 +126,14 @@ class RestClient:
                     if not getattr(resp, 'ok', False):
                         try:
                             body = resp.text
-                        except Exception:
+                        except Exception: # noqa: BLE001 Do not catch blind exception: `Exception`
                             body = "<unreadable body>"
-                        logging.warning("API call %s returned status %s; body: %s", url, resp.status_code, body)
+                        logger.warning("API call %s returned status %s; body: %s", url, resp.status_code, body)
 
                     return resp
 
-                except Exception as err:
-                    logging.exception("API call %s failed (attempt %s/%s): %s", url, attempt, self.retries, err)
+                except Exception as err: # noqa: BLE001 Do not catch blind exception: `Exception`
+                    logger.error("API call %s failed (attempt %s/%s): %s", url, attempt, self.retries, err, exc_info=False)
                     if attempt == self.retries:
                         return None
                     time.sleep(_calc_backoff(attempt, self.backoff_factor))
@@ -156,7 +156,7 @@ class RestClient:
                     response = client.request(method, url, **kwargs)
 
                     if response.status_code in _STATUS_FORCELIST:
-                        logging.warning("API call %s returned transient status %s (attempt %s/%s)", url, response.status_code, attempt, self.retries)
+                        logger.warning("API call %s returned transient status %s (attempt %s/%s)", url, response.status_code, attempt, self.retries)
                         if attempt == self.retries:
                             return response
                         time.sleep(_calc_backoff(attempt, self.backoff_factor))
@@ -165,19 +165,19 @@ class RestClient:
                     if not response.is_success:
                         try:
                             body = response.text
-                        except Exception:
+                        except Exception: # noqa: BLE001 Do not catch blind exception: `Exception`
                             body = "<unreadable body>"
-                        logging.warning("API call %s returned status %s; body: %s", url, response.status_code, body)
+                        logger.warning("API call %s returned status %s; body: %s", url, response.status_code, body)
 
                     return response
 
                 except httpx.RequestError as err:
-                    logging.exception("API call %s failed (attempt %s/%s): %s", url, attempt, self.retries, err)
+                    logger.error("API call %s failed (attempt %s/%s): %s", url, attempt, self.retries, err, exc_info=False)
                     if attempt == self.retries:
                         return None
                     time.sleep(_calc_backoff(attempt, self.backoff_factor))
 
-    async def async_request(self, method: str, url: str, params: Optional[dict] = None, payload_data=None, files=None, headers=None, timeout: Optional[float] = None) -> Optional[object]:
+    async def async_request(self, method: str, url: str, params: dict | None = None, payload_data=None, files=None, headers=None, timeout: float | None = None) -> object | None:
         """Asynchronous request (awaitable). If Digest auth is used and requests is the fallback, runs sync calls in a thread."""
         method = (method or 'GET').upper()
         if method == 'GET' and (files is not None or payload_data is not None):
@@ -207,7 +207,7 @@ class RestClient:
                 response = await self._async_client.request(method, url, **kwargs)
 
                 if response.status_code in _STATUS_FORCELIST:
-                    logging.warning("API call %s returned transient status %s (attempt %s/%s)", url, response.status_code, attempt, self.retries)
+                    logger.warning("API call %s returned transient status %s (attempt %s/%s)", url, response.status_code, attempt, self.retries)
                     if attempt == self.retries:
                         return response
                     await asyncio.sleep(_calc_backoff(attempt, self.backoff_factor))
@@ -216,32 +216,32 @@ class RestClient:
                 if not response.is_success:
                     try:
                         body = response.text
-                    except Exception:
+                    except Exception: # noqa: BLE001 Do not catch blind exception: `Exception`
                         body = "<unreadable body>"
-                    logging.warning("API call %s returned status %s; body: %s", url, response.status_code, body)
+                    logger.warning("API call %s returned status %s; body: %s", url, response.status_code, body)
 
                 return response
 
             except httpx.RequestError as err:
-                logging.exception("API call %s failed (attempt %s/%s): %s", url, attempt, self.retries, err)
+                logger.error("API call %s failed (attempt %s/%s): %s", url, attempt, self.retries, err, exc_info=False)
                 if attempt == self.retries:
                     return None
                 await asyncio.sleep(_calc_backoff(attempt, self.backoff_factor))
 
-    def get(self, url: str, params: Optional[dict] = None, headers=None, timeout=None):
+    def get(self, url: str, params: dict | None = None, headers=None, timeout=None):
         return self.request("GET", url, params=params, headers=headers, timeout=timeout)
 
     def close(self):
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:
+            except Exception: # noqa: BLE001,S110
                 # never let closing the client crash the app
                 pass
         if self._requests_session is not None:
             try:
                 self._requests_session.close()
-            except Exception:
+            except Exception: # noqa: BLE001,S110
                 # never let closing the session crash the app
                 pass
 
@@ -249,7 +249,7 @@ class RestClient:
         if self._async_client is not None:
             try:
                 await self._async_client.aclose()
-            except Exception:
+            except Exception: # noqa: BLE001,S110
                 # never let closing the async client crash the app
                 pass
 
@@ -265,7 +265,7 @@ class RestClient:
         try:
             self.close()
         except Exception:
-            logging.exception("Error closing RestClient in __exit__")
+            logger.exception("Error closing RestClient in __exit__")
         return False
 
     async def __aenter__(self):
@@ -278,5 +278,5 @@ class RestClient:
         try:
             await self.aclose()
         except Exception:
-            logging.exception("Error closing RestClient in __aexit__")
+            logger.exception("Error closing RestClient in __aexit__")
         return False

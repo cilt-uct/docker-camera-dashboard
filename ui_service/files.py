@@ -1,10 +1,11 @@
 import asyncio
-
 from pathlib import Path
+
+from core import settings
 from fastapi import Request
 
-from utils.settings import logger
-from core import settings
+from utils.logger import logger
+
 
 # Internal (SYNC) -------------------------------------------
 def _get_latest_image_path(image_dir: Path):
